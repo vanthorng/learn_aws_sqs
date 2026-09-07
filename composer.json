@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "aws/aws-sdk-php": "^3.0",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
@@ -67,6 +68,10 @@
             "npm run check",
             "npm run types:check",
             "@test"
+        ],
+        "vercel": [
+            "npm ci",
+            "npm run build"
         ],
         "types:check": [
             "phpstan analyse"
