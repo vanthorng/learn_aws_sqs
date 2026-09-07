@@ -70,6 +70,8 @@
             "@test"
         ],
         "vercel": [
+            "@php -r \"array_map('unlink', glob('bootstrap/cache/*.php'));\"",
+            "@php artisan wayfinder:generate --with-form --no-interaction",
             "npm ci",
             "npm run build"
         ],
