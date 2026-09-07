@@ -8,3 +8,4 @@ vendor
 docker
 storage/logs
 compose.yaml
+bootstrap/cache/*.php
