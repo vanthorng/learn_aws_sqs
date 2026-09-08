@@ -185,8 +185,11 @@ class ProcessInvoiceImport implements ShouldQueue
             return $disk->path($import->storage_path);
         }
 
-        $temporaryPath = tempnam(sys_get_temp_dir(), 'invoice-import-');
+        $temporaryPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'invoice-import-'.$import->id.'.xlsx';
         $source = $disk->readStream($import->storage_path);
+        if (! $source) {
+            throw new RuntimeException("Unable to read import file from S3: {$import->storage_path}");
+        }
         $destination = fopen($temporaryPath, 'wb');
         stream_copy_to_stream($source, $destination);
         fclose($destination);
