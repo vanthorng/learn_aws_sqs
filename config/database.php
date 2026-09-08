@@ -86,7 +86,11 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DB_URL'),
+            // Supabase's Vercel integration exposes POSTGRES_URL. Prefer an
+            // explicitly configured Laravel DB_URL, but accept that managed
+            // connection string so serverless deployments do not fall back to
+            // localhost/default credentials.
+            'url' => env('DB_URL', env('POSTGRES_URL')),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
             'database' => env('DB_DATABASE', 'laravel'),

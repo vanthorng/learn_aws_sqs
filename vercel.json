@@ -5,12 +5,8 @@
     "env": {
         "APP_ENV": "production",
         "APP_DEBUG": "false",
-        "APP_URL": "https://learnawssqs-teerexs-projects.vercel.app",
-        "BROADCAST_CONNECTION": "log",
         "CACHE_STORE": "array",
         "LOG_CHANNEL": "stderr",
-        "QUEUE_CONNECTION": "sync",
-        "SESSION_DRIVER": "array",
         "VIEW_COMPILED_PATH": "/tmp/views"
     },
     "functions": {
