@@ -9,6 +9,8 @@ export const echo = key
           key,
           cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
           forceTLS: true,
+          authEndpoint: '/broadcasting/auth',
+          withCredentials: true,
           Pusher,
       })
     : null;
