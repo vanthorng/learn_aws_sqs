@@ -7,6 +7,7 @@
         "APP_DEBUG": "false",
         "CACHE_STORE": "array",
         "LOG_CHANNEL": "stderr",
+        "SESSION_DRIVER": "cookie",
         "VIEW_COMPILED_PATH": "/tmp/views"
     },
     "functions": {

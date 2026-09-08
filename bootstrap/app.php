@@ -8,7 +8,6 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,16 +29,6 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Vercel truncates long Laravel stack traces in function logs. Emit a
-        // separate compact entry so production failures remain diagnosable
-        // without exposing APP_DEBUG details to browser users.
-        $exceptions->report(function (Throwable $exception): void {
-            Log::error('Unhandled request exception', [
-                'type' => $exception::class,
-                'message' => $exception->getMessage(),
-            ]);
-        })->stop();
-
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
