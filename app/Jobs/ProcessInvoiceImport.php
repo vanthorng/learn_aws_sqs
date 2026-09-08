@@ -91,7 +91,7 @@ class ProcessInvoiceImport implements ShouldQueue
         $import->update([
             'status' => InvoiceImportStatus::Failed,
             'completed_at' => now(),
-            'error_summary' => 'The import could not be processed. Please retry or contact support.',
+            'error_summary' => 'The import could not be processed. Please retry or contact our support.',
         ]);
         $import->refresh();
         Log::error('Invoice import failed permanently.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
