@@ -45,7 +45,7 @@ class ProcessInvoiceImport implements ShouldQueue
         }
 
         $import = InvoiceImport::findOrFail($this->importId);
-        event(new InvoiceImportUpdated($import, 'started'));
+        $this->safeBroadcast($import, 'started');
         $temporaryPath = null;
 
         try {
@@ -69,7 +69,7 @@ class ProcessInvoiceImport implements ShouldQueue
             $import->refresh();
             $import->update(['status' => InvoiceImportStatus::Completed, 'percentage' => 100, 'completed_at' => now()]);
             $import->refresh();
-            event(new InvoiceImportUpdated($import, 'completed'));
+            $this->safeBroadcast($import, 'completed');
 
             if ($import->auto_sync_qbo && $import->team?->quickbooksConnection) {
                 SyncImportToQuickBooks::dispatch($import->id)
@@ -77,7 +77,10 @@ class ProcessInvoiceImport implements ShouldQueue
                     ->onQueue(config('imports.queue'));
             }
         } catch (Throwable $exception) {
-            $import->update(['status' => InvoiceImportStatus::Pending->value]);
+            $import->update([
+                'status' => InvoiceImportStatus::Pending->value,
+                'error_summary' => 'Import attempt error: ' . $exception->getMessage(),
+            ]);
             Log::warning('Invoice import attempt failed.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
             throw $exception;
         } finally {
@@ -97,12 +100,21 @@ class ProcessInvoiceImport implements ShouldQueue
         $import->update([
             'status' => InvoiceImportStatus::Failed,
             'completed_at' => now(),
-            'error_summary' => 'The import could not be processed. Please retry or contact support.',
+            'error_summary' => 'Import failed: ' . $exception->getMessage(),
         ]);
         $import->refresh();
         Log::error('Invoice import failed permanently.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
         $this->sendToDeadLetterQueue($import, $exception);
-        event(new InvoiceImportUpdated($import, 'failed'));
+        $this->safeBroadcast($import, 'failed');
+    }
+
+    private function safeBroadcast(InvoiceImport $import, string $event): void
+    {
+        try {
+            event(new InvoiceImportUpdated($import, $event));
+        } catch (\Throwable $e) {
+            Log::warning("Broadcasting {$event} failed: " . $e->getMessage());
+        }
     }
 
     /** @param list<array{rowNumber: int, values: array<string, string|null>}> $batch */
@@ -151,7 +163,7 @@ class ProcessInvoiceImport implements ShouldQueue
         });
 
         $import->refresh();
-        event(new InvoiceImportUpdated($import, 'progress'));
+        $this->safeBroadcast($import, 'progress');
     }
 
     /** @param array<string, string|null> $values

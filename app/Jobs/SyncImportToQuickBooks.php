@@ -54,7 +54,7 @@ class SyncImportToQuickBooks implements ShouldQueue
             'qbo_failed_count' => 0,
             'qbo_current_message' => "Connecting to QuickBooks Online and preloading catalog...",
         ]);
-        event(new InvoiceImportUpdated($import, 'qbo_sync_started'));
+        $this->safeBroadcast($import, 'qbo_sync_started');
 
         if ($totalInvoicesToSync === 0) {
             $import->update([
@@ -62,7 +62,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_last_synced_at' => now(),
                 'qbo_current_message' => "All {$existingSyncedCount} invoices already synced to QuickBooks Online.",
             ]);
-            event(new InvoiceImportUpdated($import, 'qbo_sync_completed'));
+            $this->safeBroadcast($import, 'qbo_sync_completed');
             return;
         }
 
@@ -244,7 +244,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_failed_count' => $failedCount,
                 'qbo_current_message' => $currentMsg,
             ]);
-            event(new InvoiceImportUpdated($import, 'qbo_sync_progress'));
+            $this->safeBroadcast($import, 'qbo_sync_progress');
         }
 
         $finalStatus = $failedCount > 0 ? ($syncedCount > 0 ? 'partially_synced' : 'failed') : 'synced';
@@ -266,7 +266,7 @@ class SyncImportToQuickBooks implements ShouldQueue
         ]);
 
         $import->refresh();
-        event(new InvoiceImportUpdated($import, 'qbo_sync_completed'));
+        $this->safeBroadcast($import, 'qbo_sync_completed');
     }
 
     public function failed(Throwable $exception): void
@@ -277,7 +277,16 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_sync_status' => 'failed',
                 'qbo_sync_error' => 'QuickBooks sync failed: ' . $exception->getMessage(),
             ]);
-            event(new InvoiceImportUpdated($import, 'qbo_sync_failed'));
+            $this->safeBroadcast($import, 'qbo_sync_failed');
+        }
+    }
+
+    private function safeBroadcast(InvoiceImport $import, string $event): void
+    {
+        try {
+            event(new InvoiceImportUpdated($import, $event));
+        } catch (\Throwable $e) {
+            Log::warning("Broadcasting {$event} failed: " . $e->getMessage());
         }
     }
 }
