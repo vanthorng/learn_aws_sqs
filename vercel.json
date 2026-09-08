@@ -1,6 +1,6 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
-    "buildCommand": "npm run build",
+    "buildCommand": "composer run vercel --no-interaction",
     "outputDirectory": "public",
     "env": {
         "APP_ENV": "production",
