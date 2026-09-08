@@ -31,9 +31,17 @@ class QuickBooksSyncController extends Controller
             'Import must be completed before syncing to QuickBooks.'
         );
 
+        $invoiceImport->records()->whereNull('qbo_invoice_id')->update(['qbo_sync_error' => null]);
+        $invoiceImport->update([
+            'qbo_sync_status' => 'syncing',
+            'qbo_sync_error' => null,
+            'qbo_current_message' => 'Queuing QuickBooks synchronization via SQS...',
+        ]);
+
         SyncImportToQuickBooks::dispatch($invoiceImport->id)
             ->onConnection(config('imports.queue_connection'))
             ->onQueue(config('imports.queue'));
+
 
         return back()->with('toast', [
             'type' => 'success',

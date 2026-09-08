@@ -27,6 +27,7 @@ class SyncImportToQuickBooks implements ShouldQueue
 
     public function handle(QuickBooksClient $client): void
     {
+        $jobStartTime = microtime(true);
         $import = InvoiceImport::with(['team.quickbooksConnection', 'records'])->findOrFail($this->importId);
         $connection = $import->team->quickbooksConnection;
 
@@ -35,7 +36,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_sync_status' => 'failed',
                 'qbo_sync_error' => 'QuickBooks is not connected for this team.',
             ]);
-            event(new InvoiceImportUpdated($import, 'qbo_sync_failed'));
+            $this->safeBroadcast($import, 'qbo_sync_failed');
             return;
         }
 
@@ -195,10 +196,13 @@ class SyncImportToQuickBooks implements ShouldQueue
                 $batchFirstDoc = $batchPayloads[0]['bId'];
                 $batchLastDoc = end($batchPayloads)['bId'];
 
+                $elapsedSec = max(1, (int) round(microtime(true) - $jobStartTime));
+                $elapsedStr = $elapsedSec >= 60 ? sprintf('%dm %02ds', intdiv($elapsedSec, 60), $elapsedSec % 60) : "{$elapsedSec}s";
+
                 $import->update([
-                    'qbo_current_message' => "Batch {$batchNumber}/{$totalBatches}: Sending {$batchFirstDoc} to {$batchLastDoc} to QuickBooks Online...",
+                    'qbo_current_message' => "Batch {$batchNumber}/{$totalBatches} ({$elapsedStr}): Sending {$batchFirstDoc} to {$batchLastDoc} to QuickBooks Online...",
                 ]);
-                event(new InvoiceImportUpdated($import, 'qbo_sync_progress'));
+                $this->safeBroadcast($import, 'qbo_sync_progress');
 
                 try {
                     $results = $client->batchCreateInvoices($connection, $batchPayloads);
@@ -238,7 +242,11 @@ class SyncImportToQuickBooks implements ShouldQueue
                 }
             }
 
-            $currentMsg = "Batch {$batchNumber}/{$totalBatches} completed: {$syncedCount}/{$totalInvoices} invoices pushed to QuickBooks.";
+            $elapsedSec = max(1, (int) round(microtime(true) - $jobStartTime));
+            $elapsedStr = $elapsedSec >= 60 ? sprintf('%dm %02ds', intdiv($elapsedSec, 60), $elapsedSec % 60) : "{$elapsedSec}s";
+
+            $failNotice = $failedCount > 0 ? " ({$failedCount} with notices, queue continuing)" : "";
+            $currentMsg = "Batch {$batchNumber}/{$totalBatches} finished ({$elapsedStr}): {$syncedCount}/{$totalInvoices} synced{$failNotice}.";
             $import->update([
                 'qbo_synced_count' => $syncedCount,
                 'qbo_failed_count' => $failedCount,
@@ -247,27 +255,28 @@ class SyncImportToQuickBooks implements ShouldQueue
             $this->safeBroadcast($import, 'qbo_sync_progress');
         }
 
-        $finalStatus = $failedCount > 0 ? ($syncedCount > 0 ? 'partially_synced' : 'failed') : 'synced';
-        $startTime = $import->qbo_sync_started_at ?? $import->started_at ?? now();
-        $durationSeconds = max(1, now()->diffInSeconds($startTime));
+        $durationSeconds = max(1, (int) round(microtime(true) - $jobStartTime));
         $durationStr = $durationSeconds >= 60
             ? sprintf('%dm %02ds', intdiv($durationSeconds, 60), $durationSeconds % 60)
             : "{$durationSeconds}s";
 
+        $finalStatus = $syncedCount > 0 ? ($failedCount > 0 ? 'partially_synced' : 'synced') : 'failed';
+
         $finalMsg = $failedCount > 0
-            ? "Completed in {$durationStr} with notices: {$syncedCount} synced, {$failedCount} failed to QuickBooks Online."
+            ? "Completed in {$durationStr}: {$syncedCount} synced to QuickBooks Online ({$failedCount} skipped due to errors)."
             : "Successfully synced all {$syncedCount} invoices to QuickBooks Online in {$durationStr}!";
 
         $import->update([
             'qbo_sync_status' => $finalStatus,
             'qbo_last_synced_at' => now(),
             'qbo_current_message' => $finalMsg,
-            'qbo_sync_error' => $failedCount > 0 ? "Synced {$syncedCount} invoices, {$failedCount} failed: {$lastError}" : null,
+            'qbo_sync_error' => $failedCount > 0 ? "Synced {$syncedCount}, skipped {$failedCount}: {$lastError}" : null,
         ]);
 
         $import->refresh();
         $this->safeBroadcast($import, 'qbo_sync_completed');
     }
+
 
     public function failed(Throwable $exception): void
     {

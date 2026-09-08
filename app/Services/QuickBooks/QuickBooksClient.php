@@ -381,10 +381,25 @@ class QuickBooksClient
                 $err = $itemResponse['Fault']['Error'][0]['Detail']
                     ?? $itemResponse['Fault']['Error'][0]['Message']
                     ?? 'Unknown batch error';
-                $results[$bId] = [
-                    'success' => false,
-                    'error' => $err,
-                ];
+
+                // If QuickBooks says this invoice already exists, extract the existing TxnId or find it
+                $matchedTxnId = null;
+                if (preg_match('/Duplicate Document Number/i', $err) && preg_match('/TxnId=(\d+)/i', $err, $m)) {
+                    $matchedTxnId = (string) $m[1];
+                }
+
+                if ($matchedTxnId !== null) {
+                    $results[$bId] = [
+                        'success' => true,
+                        'invoiceId' => $matchedTxnId,
+                        'note' => 'Already existed in QuickBooks Online (linked)',
+                    ];
+                } else {
+                    $results[$bId] = [
+                        'success' => false,
+                        'error' => $err,
+                    ];
+                }
             } elseif (isset($itemResponse['Invoice']['Id'])) {
                 $results[$bId] = [
                     'success' => true,
@@ -411,6 +426,35 @@ class QuickBooksClient
 
         return $results;
     }
+
+    /**
+     * Find existing invoice ID by DocNumber in QuickBooks Online.
+     */
+    public function findInvoiceByDocNumber(QuickbooksConnection $connection, string $docNumber): ?string
+    {
+        try {
+            $escaped = addslashes($docNumber);
+            $baseUrl = $this->getBaseUrl($connection);
+            $realmId = $connection->realm_id;
+            $connection = $this->ensureFreshTokens($connection);
+
+            $response = Http::withToken($connection->access_token)
+                ->acceptJson()
+                ->get("{$baseUrl}/v3/company/{$realmId}/query", [
+                    'query' => "select Id from Invoice where DocNumber = '{$escaped}' maxresults 1",
+                ]);
+
+            $invoices = $response->json('QueryResponse.Invoice') ?? [];
+            if (! empty($invoices) && isset($invoices[0]['Id'])) {
+                return (string) $invoices[0]['Id'];
+            }
+        } catch (\Throwable $e) {
+            Log::warning("findInvoiceByDocNumber failed for {$docNumber}: " . $e->getMessage());
+        }
+
+        return null;
+    }
+
 
     /** @var array<string, array<int, array{Id: string, Name: string}>> */
     private array $taxCodeCache = [];

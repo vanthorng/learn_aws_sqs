@@ -16,8 +16,14 @@
                         document.documentElement.classList.add('dark');
                     }
                 }
+
+                window.__PUSHER_CONFIG__ = {
+                    key: @json(config('broadcasting.connections.pusher.key')),
+                    cluster: @json(config('broadcasting.connections.pusher.options.cluster')),
+                };
             })();
         </script>
+
 
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
