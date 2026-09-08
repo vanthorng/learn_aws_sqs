@@ -23,6 +23,8 @@ class InvoiceImport extends Model
             'status' => InvoiceImportStatus::class,
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'qbo_sync_started_at' => 'datetime',
+            'qbo_last_synced_at' => 'datetime',
         ];
     }
 

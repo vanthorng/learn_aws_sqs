@@ -70,6 +70,12 @@ class ProcessInvoiceImport implements ShouldQueue
             $import->update(['status' => InvoiceImportStatus::Completed, 'percentage' => 100, 'completed_at' => now()]);
             $import->refresh();
             event(new InvoiceImportUpdated($import, 'completed'));
+
+            if ($import->auto_sync_qbo && $import->team?->quickbooksConnection) {
+                SyncImportToQuickBooks::dispatch($import->id)
+                    ->onConnection(config('imports.queue_connection'))
+                    ->onQueue(config('imports.queue'));
+            }
         } catch (Throwable $exception) {
             $import->update(['status' => InvoiceImportStatus::Pending->value]);
             Log::warning('Invoice import attempt failed.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);

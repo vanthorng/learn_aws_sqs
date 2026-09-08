@@ -27,6 +27,12 @@ class InvoiceImportController extends Controller
         return Inertia::render('imports/Index', [
             'imports' => InvoiceImport::query()->where('team_id', $current_team->id)->latest()->limit(30)->get()->map(fn (InvoiceImport $import) => $this->summary($import)),
             'canManageImports' => $request->user()->hasTeamPermission($current_team, TeamPermission::ImportInvoices),
+            'quickbooksConnection' => $current_team->quickbooksConnection ? [
+                'connected' => true,
+                'companyName' => $current_team->quickbooksConnection->company_name,
+                'realmId' => $current_team->quickbooksConnection->realm_id,
+                'environment' => $current_team->quickbooksConnection->environment,
+            ] : null,
         ]);
     }
 
@@ -54,6 +60,7 @@ class InvoiceImportController extends Controller
                 'original_filename' => $file->getClientOriginalName(),
                 'file_hash' => $fileHash,
                 'file_size' => $file->getSize(),
+                'auto_sync_qbo' => $request->boolean('auto_sync_qbo'),
             ]);
         });
 
@@ -87,6 +94,11 @@ class InvoiceImportController extends Controller
                 'txnDate' => $record->txn_date->toDateString(),
                 'lineItem' => $record->line_item,
                 'lineAmount' => $record->line_amount,
+                'qboInvoiceId' => $record->qbo_invoice_id,
+                'qboSyncedAt' => $record->qbo_synced_at instanceof \Carbon\CarbonInterface
+                    ? $record->qbo_synced_at->toIso8601String()
+                    : ($record->qbo_synced_at ? (string) $record->qbo_synced_at : null),
+                'qboSyncError' => $record->qbo_sync_error,
             ]),
         ]);
     }
@@ -122,8 +134,7 @@ class InvoiceImportController extends Controller
     {
         ProcessInvoiceImport::dispatch($import->id)
             ->onConnection(config('imports.queue_connection'))
-            ->onQueue(config('imports.queue'))
-            ->delay(now()->addSeconds(2));
+            ->onQueue(config('imports.queue'));
     }
 
     private function ensureTeamMember(Request $request, Team $team): void
@@ -145,6 +156,26 @@ class InvoiceImportController extends Controller
 
     private function summary(InvoiceImport $import): array
     {
+        $parseDuration = null;
+        if ($import->started_at && $import->completed_at) {
+            $diff = max(1, $import->completed_at->diffInSeconds($import->started_at));
+            $parseDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+        }
+
+        $qboSyncDuration = null;
+        $syncStart = $import->qbo_sync_started_at ?? $import->completed_at ?? $import->started_at;
+        if ($syncStart && $import->qbo_last_synced_at) {
+            $diff = max(1, $import->qbo_last_synced_at->diffInSeconds($syncStart));
+            $qboSyncDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+        }
+
+        $totalDuration = null;
+        $finalEnd = $import->qbo_last_synced_at ?? $import->completed_at;
+        if ($import->started_at && $finalEnd) {
+            $diff = max(1, $finalEnd->diffInSeconds($import->started_at));
+            $totalDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+        }
+
         return [
             'id' => $import->id,
             'filename' => $import->original_filename,
@@ -158,6 +189,18 @@ class InvoiceImportController extends Controller
             'errorSummary' => $import->error_summary,
             'createdAt' => $import->created_at->toIso8601String(),
             'completedAt' => $import->completed_at?->toIso8601String(),
+            'qboSyncStatus' => $import->qbo_sync_status ?? 'not_synced',
+            'qboSyncedCount' => $import->qbo_synced_count ?? 0,
+            'qboFailedCount' => $import->qbo_failed_count ?? 0,
+            'qboTotalInvoices' => $import->qbo_total_invoices ?? 0,
+            'qboCurrentMessage' => $import->qbo_current_message,
+            'qboLastSyncedAt' => $import->qbo_last_synced_at instanceof \Carbon\CarbonInterface
+                ? $import->qbo_last_synced_at->toIso8601String()
+                : ($import->qbo_last_synced_at ? (string) $import->qbo_last_synced_at : null),
+            'qboSyncError' => $import->qbo_sync_error,
+            'parseDuration' => $parseDuration,
+            'qboSyncDuration' => $qboSyncDuration,
+            'totalDuration' => $totalDuration,
         ];
     }
 }
