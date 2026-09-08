@@ -77,6 +77,28 @@ const connectionAvailable = ref(Boolean(echo));
 const subscriptionReady = ref(false);
 let poller: ReturnType<typeof setInterval> | null = null;
 let subscribedId: string | null = null;
+const liveDurationSeconds = ref(0);
+let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+function startLiveTimer(): void {
+    if (timerInterval) return;
+    liveDurationSeconds.value = 0;
+    timerInterval = setInterval(() => {
+        liveDurationSeconds.value++;
+    }, 1000);
+}
+
+function stopLiveTimer(): void {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+const formattedLiveDuration = computed(() => {
+    const s = liveDurationSeconds.value;
+    return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+});
 
 const baseUrl = computed(() => `/${page.props.currentTeam?.slug}/imports`);
 const qboUrl = computed(() => `/${page.props.currentTeam?.slug}/quickbooks`);
@@ -118,6 +140,7 @@ function mergeImport(next: Partial<ImportSummary> & { id: string }): void {
     const index = imports.value.findIndex((item) => item.id === next.id);
     if (index === -1) return;
     imports.value[index] = { ...imports.value[index], ...next } as ImportSummary;
+    imports.value = [...imports.value];
 }
 
 function applyProgress(event: ImportProgressEvent): void {
@@ -163,12 +186,13 @@ function subscribe(): void {
 
 function startPolling(): void {
     if (poller || !isActive.value) return;
-    poller = setInterval(() => { void loadImport(); }, 3000);
+    poller = setInterval(() => { void loadImport(); }, 1500);
 }
 function stopPolling(): void {
     if (poller) clearInterval(poller);
     poller = null;
 }
+
 
 function upload(autoSyncQbo = false): void {
     if (!file.value) return;
@@ -214,10 +238,12 @@ watch(selectedId, (id) => {
 watch(isActive, (active) => {
     if (active) {
         startPolling();
+        startLiveTimer();
     } else {
         stopPolling();
+        stopLiveTimer();
     }
-});
+}, { immediate: true });
 
 onMounted(() => {
     if (echo) {
@@ -225,9 +251,21 @@ onMounted(() => {
         connection?.bind('connected', () => { connectionAvailable.value = true; void loadImport(); });
         connection?.bind('unavailable', () => { connectionAvailable.value = false; startPolling(); });
     }
-    if (selectedId.value) { void loadImport(); subscribe(); startPolling(); }
+    if (selectedId.value) {
+        void loadImport();
+        subscribe();
+        if (isActive.value) {
+            startPolling();
+            startLiveTimer();
+        }
+    }
 });
-onBeforeUnmount(() => { stopPolling(); if (subscribedId && echo) echo.leave(`import.${subscribedId}`); });
+onBeforeUnmount(() => {
+    stopPolling();
+    stopLiveTimer();
+    if (subscribedId && echo) echo.leave(`import.${subscribedId}`);
+});
+
 </script>
 
 <template>
@@ -405,12 +443,19 @@ onBeforeUnmount(() => { stopPolling(); if (subscribedId && echo) echo.leave(`imp
                             <div>
                                 <span class="text-muted-foreground block">Total Duration</span>
                                 <span class="font-medium text-foreground">
-                                    {{ selected.totalDuration || selected.qboSyncDuration || selected.parseDuration || 'In progress…' }}
+                                    <template v-if="isActive">
+                                        <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                            <Loader2 class="size-3 animate-spin inline" /> {{ formattedLiveDuration }}
+                                        </span>
+                                    </template>
+                                    <template v-else>
+                                        {{ selected.totalDuration || selected.qboSyncDuration || selected.parseDuration || '—' }}
+                                    </template>
                                 </span>
                             </div>
                             <div>
                                 <span class="text-muted-foreground block">Live Status</span>
-                                {{ subscriptionReady ? 'Websocket Live' : (connectionAvailable ? 'Connecting…' : 'Active Polling') }}
+                                {{ subscriptionReady ? 'Websocket Live' : (connectionAvailable ? 'Connecting…' : 'Active Polling (1.5s)') }}
                             </div>
                         </div>
                     </div>
@@ -428,16 +473,18 @@ onBeforeUnmount(() => { stopPolling(); if (subscribedId && echo) echo.leave(`imp
                             </div>
 
                             <div class="flex items-center gap-3">
-                                <span v-if="selected.totalDuration || selected.qboSyncDuration" class="flex items-center gap-1 text-xs text-emerald-800 dark:text-emerald-300">
+                                <span class="flex items-center gap-1 text-xs text-emerald-800 dark:text-emerald-300">
                                     <Clock class="size-3.5" />
-                                    <span>Time: <strong>{{ selected.totalDuration || selected.qboSyncDuration }}</strong></span>
-                                    <span v-if="selected.parseDuration && selected.qboSyncDuration" class="text-muted-foreground font-normal">
+                                    <span v-if="isActive">Time: <strong>{{ formattedLiveDuration }}</strong></span>
+                                    <span v-else-if="selected.totalDuration || selected.qboSyncDuration">Time: <strong>{{ selected.totalDuration || selected.qboSyncDuration }}</strong></span>
+                                    <span v-if="!isActive && selected.parseDuration && selected.qboSyncDuration" class="text-muted-foreground font-normal">
                                         (Parse: {{ selected.parseDuration }}, QBO: {{ selected.qboSyncDuration }})
                                     </span>
                                 </span>
                                 <span class="font-semibold text-emerald-700 dark:text-emerald-300 text-sm">{{ qboPercentage }}%</span>
                             </div>
                         </div>
+
 
                         <!-- Green QBO Progress Bar -->
                         <div class="bg-emerald-200/60 dark:bg-emerald-900/50 h-3 overflow-hidden rounded-full">
