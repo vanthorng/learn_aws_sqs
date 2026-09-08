@@ -23,7 +23,7 @@ export type UseCurrentUrlReturn = {
 };
 
 const page = usePage();
-const currentUrlReactive = computed(
+const currentUrlReactive = computed( 
     () =>
         new URL(
             page.url,
