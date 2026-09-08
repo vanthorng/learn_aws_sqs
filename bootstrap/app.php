@@ -38,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 'type' => $exception::class,
                 'message' => $exception->getMessage(),
             ]);
-        });
+        })->stop();
 
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
