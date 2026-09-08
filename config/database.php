@@ -17,7 +17,11 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    // Vercel's Supabase integration provides POSTGRES_URL but does not set
+    // Laravel's DB_CONNECTION. Prefer its PostgreSQL connection whenever it
+    // is present so an old/project-level DB_CONNECTION cannot select SQLite
+    // or MySQL in a serverless deployment.
+    'default' => env('POSTGRES_URL') ? 'pgsql' : env('DB_CONNECTION', 'sqlite'),
 
     /*
     |--------------------------------------------------------------------------
@@ -86,7 +90,11 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DB_URL'),
+            // Supabase's Vercel integration exposes POSTGRES_URL. Prefer an
+            // explicitly configured Laravel DB_URL, but accept that managed
+            // connection string so serverless deployments do not fall back to
+            // localhost/default credentials.
+            'url' => env('DB_URL', env('POSTGRES_URL')),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
             'database' => env('DB_DATABASE', 'laravel'),
