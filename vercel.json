@@ -1,6 +1,6 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
-    "buildCommand": "npm run build",
+    "buildCommand": "echo Building through the PHP runtime",
     "outputDirectory": "public",
     "env": {
         "APP_ENV": "production",
