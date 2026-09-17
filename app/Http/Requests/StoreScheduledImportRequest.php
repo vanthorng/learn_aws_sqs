@@ -6,7 +6,7 @@ use App\Enums\TeamPermission;
 use App\Models\Team;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreInvoiceImportRequest extends FormRequest
+class StoreScheduledImportRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,6 +18,10 @@ class StoreInvoiceImportRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['file' => ['required', 'file', 'mimes:xlsx', 'max:20480']];
+        return [
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+            'scheduled_for' => ['required', 'date', 'after:now'],
+            'auto_sync_qbo' => ['nullable', 'boolean'],
+        ];
     }
 }

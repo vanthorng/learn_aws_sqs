@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { AlertCircle, CheckCircle2, Clock, CloudUpload, ExternalLink, FileSpreadsheet, Loader2, RefreshCw, Send, Unlink, Upload } from '@lucide/vue';
 import { echo } from '@/echo';
@@ -287,6 +287,7 @@ onBeforeUnmount(() => {
                         <CheckCircle2 class="size-4 text-emerald-600 dark:text-emerald-400" />
                         <span>QuickBooks Connected <strong v-if="quickbooksConnection.companyName">({{ quickbooksConnection.companyName }})</strong></span>
                     </div>
+                    <Button v-if="canManageImports" variant="outline" size="sm" as-child><Link :href="`/${$page.props.currentTeam?.slug}/quickbooks/data`">QBO data</Link></Button>
                     <Button v-if="canManageImports" variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-destructive" title="Disconnect QuickBooks" @click="disconnectQuickBooks">
                         <Unlink class="mr-1 size-3.5" /> Disconnect
                     </Button>
@@ -302,8 +303,15 @@ onBeforeUnmount(() => {
         <!-- Upload Card -->
         <Card v-if="canManageImports">
             <CardHeader><CardTitle>Upload an invoice workbook</CardTitle></CardHeader>
-            <CardContent class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null" />
+            <CardContent class="flex flex-col gap-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm text-muted-foreground">Use the supported QuickBooks invoice template to avoid validation errors.</p>
+                    <a href="/samples/invoice-import-template.xlsx" download class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                        <FileSpreadsheet class="size-4" /> Download sample file
+                    </a>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null" />
                 <div class="flex items-center gap-2">
                     <Button
                         v-if="quickbooksConnection?.connected"
@@ -318,6 +326,7 @@ onBeforeUnmount(() => {
                         <Upload class="mr-1.5 size-4" />
                         {{ uploading ? 'Uploading…' : 'Start import' }}
                     </Button>
+                </div>
                 </div>
             </CardContent>
         </Card>

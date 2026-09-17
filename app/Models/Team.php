@@ -107,6 +107,32 @@ class Team extends Model
     }
 
     /**
+     * Get the imports queued to run in the future.
+     *
+     * @return HasMany<ScheduledImport, $this>
+     */
+    public function scheduledImports(): HasMany
+    {
+        return $this->hasMany(ScheduledImport::class);
+    }
+
+    /**
+     * Get the API keys that can submit imports to this team.
+     *
+     * @return HasMany<TeamApiToken, $this>
+     */
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(TeamApiToken::class);
+    }
+
+    /** @return HasMany<QuickbooksOperation, $this> */
+    public function quickbooksOperations(): HasMany
+    {
+        return $this->hasMany(QuickbooksOperation::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
