@@ -28,4 +28,3 @@ export const echo = (key && cluster)
           Pusher,
       })
     : null;
-

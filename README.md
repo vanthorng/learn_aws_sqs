@@ -1,5 +1,17 @@
 # Invoice imports
 
+## CI/CD
+
+Every pull request targeting `main` or `production`, and every push to either branch, runs independent PHP quality, Laravel test, frontend quality/build, dependency-review, and production-dependency-audit jobs. A green CI run on `main` deploys a Vercel preview through `deploy-main.yml`. A green CI run on `production` triggers `deploy-production.yml`, which deploys that exact verified commit through the protected production environment.
+
+Create GitHub environments named `main` and `production`. Require the appropriate reviewer(s) for `production`. Add the following secrets to both environments:
+
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `VERCEL_TOKEN` (a Vercel token with access only to this project)
+
+Protect `main` in GitHub and require the `PHP quality`, `Backend tests`, `Frontend quality and build`, and `Production dependency audit` checks before merge. Keep the Vercel credentials scoped to the `production` environment; pull-request workflows never receive them. If this repository is also connected to Vercel's Git integration, disable its automatic production deployment to avoid deploying each `main` commit twice.
+
 Invoice workbooks are uploaded to private storage and processed asynchronously through the configured Laravel queue. In production configure `IMPORTS_DISK=s3`, `IMPORT_QUEUE_CONNECTION=sqs`, the AWS credentials/bucket, and Pusher credentials.
 
 ## Vercel and Pusher
