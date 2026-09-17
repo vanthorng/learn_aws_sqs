@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Imports\DispatchScheduledImports;
 use App\Models\TeamInvitation;
 use Illuminate\Support\Facades\Schedule;
 
@@ -9,6 +10,17 @@ Schedule::call(function () {
         ->where('expires_at', '<', now())
         ->delete();
 })->daily()->description('Delete expired team invitations');
+
+Schedule::command('imports:dispatch-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('Dispatch invoice imports that have reached their scheduled time');
+
+Artisan::command('imports:dispatch-scheduled', function (DispatchScheduledImports $dispatchScheduledImports) {
+    $count = $dispatchScheduledImports->handle();
+
+    $this->info($count === 1 ? 'Dispatched 1 scheduled import.' : "Dispatched {$count} scheduled imports.");
+})->purpose('Dispatch due scheduled invoice imports');
 
 Artisan::command('import:run {id? : The ID of the import to run} {--queue : Dispatch to queue instead of running synchronously}', function ($id = null) {
     $import = $id 
@@ -50,4 +62,3 @@ Artisan::command('import:run {id? : The ID of the import to run} {--queue : Disp
 
     return 0;
 })->purpose('Run or dispatch an invoice import directly');
-

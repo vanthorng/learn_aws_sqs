@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvoiceImportController;
+use App\Http\Controllers\ScheduledImportController;
 use App\Http\Controllers\QuickBooks\QuickBooksAuthController;
 use App\Http\Controllers\QuickBooks\QuickBooksSyncController;
 use App\Http\Controllers\Teams\TeamInvitationController;
@@ -18,6 +19,10 @@ Route::prefix('{current_team}')
         Route::post('imports', [InvoiceImportController::class, 'store'])->name('imports.store');
         Route::get('imports/{invoiceImport}', [InvoiceImportController::class, 'show'])->name('imports.show');
         Route::post('imports/{invoiceImport}/retry', [InvoiceImportController::class, 'retry'])->name('imports.retry');
+
+        Route::get('schedule', [ScheduledImportController::class, 'index'])->name('schedules.index');
+        Route::post('schedule', [ScheduledImportController::class, 'store'])->name('schedules.store');
+        Route::delete('schedule/{scheduledImport}', [ScheduledImportController::class, 'cancel'])->name('schedules.cancel');
 
         // QuickBooks Online Integration
         Route::get('quickbooks/connect', [QuickBooksAuthController::class, 'connect'])->name('quickbooks.connect');

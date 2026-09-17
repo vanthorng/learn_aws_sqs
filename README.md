@@ -18,3 +18,13 @@ php artisan queue:work sqs --queue=invoice-imports --tries=3 --backoff=30,120,30
 ```
 
 The worker requires access to the same private import disk and Pusher configuration as the web application. Failed jobs are also recorded by Laravel's configured failed-job driver for investigation.
+
+## Scheduled imports
+
+Teams can upload an XLSX workbook and select a future processing time from **Schedule**. The workbook stays on the private import disk until the scheduler creates a normal invoice import and puts it onto the same queue as a manual upload. Run Laravel's scheduler alongside the queue worker in production:
+
+```powershell
+php artisan schedule:work
+```
+
+For a traditional server, run `php artisan schedule:run` every minute through the system cron instead. The `imports:dispatch-scheduled` command is safe to invoke independently when diagnosing scheduled work.

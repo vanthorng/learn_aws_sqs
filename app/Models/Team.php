@@ -107,6 +107,16 @@ class Team extends Model
     }
 
     /**
+     * Get the imports queued to run in the future.
+     *
+     * @return HasMany<ScheduledImport, $this>
+     */
+    public function scheduledImports(): HasMany
+    {
+        return $this->hasMany(ScheduledImport::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
