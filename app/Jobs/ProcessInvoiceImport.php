@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\InvoiceImportStatus;
 use App\Events\InvoiceImportUpdated;
+use App\Actions\Imports\NotifyImportOutcome;
 use App\Models\InvoiceImport;
 use App\Models\InvoiceImportRow;
 use App\Models\InvoiceRecord;
@@ -28,7 +29,7 @@ class ProcessInvoiceImport implements ShouldQueue
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(): void
+    public function handle(NotifyImportOutcome $notifyImportOutcome): void
     {
         $claimed = InvoiceImport::query()
             ->whereKey($this->importId)
@@ -70,6 +71,7 @@ class ProcessInvoiceImport implements ShouldQueue
             $import->update(['status' => InvoiceImportStatus::Completed, 'percentage' => 100, 'completed_at' => now()]);
             $import->refresh();
             $this->safeBroadcast($import, 'completed');
+            $notifyImportOutcome->handle($import, 'import_completed');
 
             if ($import->auto_sync_qbo && $import->team?->quickbooksConnection) {
                 SyncImportToQuickBooks::dispatch($import->id)
@@ -106,6 +108,7 @@ class ProcessInvoiceImport implements ShouldQueue
         Log::error('Invoice import failed permanently.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
         $this->sendToDeadLetterQueue($import, $exception);
         $this->safeBroadcast($import, 'failed');
+        app(NotifyImportOutcome::class)->handle($import, 'import_failed');
     }
 
     private function safeBroadcast(InvoiceImport $import, string $event): void

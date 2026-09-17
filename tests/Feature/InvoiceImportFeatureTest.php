@@ -3,13 +3,17 @@
 use App\Enums\InvoiceImportStatus;
 use App\Enums\TeamRole;
 use App\Models\InvoiceImport;
+use App\Models\TeamApiToken;
 use App\Models\Team;
 use App\Models\User;
 use App\Jobs\ProcessInvoiceImport;
 use App\Actions\Imports\DispatchScheduledImports;
+use App\Actions\Imports\NotifyImportOutcome;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use App\Models\ScheduledImport;
+use App\Notifications\InvoiceImportNotification;
+use Illuminate\Support\Facades\Notification;
 
 function importTestTeam(User $user, TeamRole $role = TeamRole::Owner): Team
 {
@@ -147,4 +151,64 @@ test('due scheduled imports are converted into queued imports exactly once', fun
         ->and($import->auto_sync_qbo)->toBeTrue();
     Queue::assertPushed(ProcessInvoiceImport::class, fn (ProcessInvoiceImport $job) => $job->importId === $import->id);
     expect(app(DispatchScheduledImports::class)->handle())->toBe(0);
+});
+
+test('team API key can only inspect imports belonging to its team', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $other = User::factory()->create();
+    $otherTeam = importTestTeam($other);
+    $import = makeInvoiceImport($team, $user);
+    $otherImport = makeInvoiceImport($otherTeam, $other);
+    $plainToken = 'imp_test_token';
+
+    TeamApiToken::create([
+        'team_id' => $team->id,
+        'created_by' => $user->id,
+        'name' => 'Test integration',
+        'token_hash' => hash('sha256', $plainToken),
+    ]);
+
+    $this->withHeader('Authorization', "Bearer {$plainToken}")
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")
+        ->assertOk()
+        ->assertJsonPath('data.id', $import->id);
+
+    $this->withHeader('Authorization', "Bearer {$plainToken}")
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$otherImport->id}")
+        ->assertNotFound();
+});
+
+test('API import endpoints reject a missing or revoked API key', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $import = makeInvoiceImport($team, $user);
+
+    $this->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")->assertUnauthorized();
+
+    TeamApiToken::create([
+        'team_id' => $team->id,
+        'created_by' => $user->id,
+        'name' => 'Revoked key',
+        'token_hash' => hash('sha256', 'imp_revoked_token'),
+        'revoked_at' => now(),
+    ]);
+
+    $this->withHeader('Authorization', 'Bearer imp_revoked_token')
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")
+        ->assertUnauthorized();
+});
+
+test('import outcomes notify both the uploader and import managers', function () {
+    Notification::fake();
+    $uploader = User::factory()->create();
+    $team = importTestTeam($uploader, TeamRole::Member);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Owner->value]);
+    $import = makeInvoiceImport($team, $uploader, InvoiceImportStatus::Completed);
+
+    app(NotifyImportOutcome::class)->handle($import, 'import_completed');
+
+    Notification::assertSentTo($uploader, InvoiceImportNotification::class);
+    Notification::assertSentTo($manager, InvoiceImportNotification::class);
 });

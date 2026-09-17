@@ -28,3 +28,23 @@ php artisan schedule:work
 ```
 
 For a traditional server, run `php artisan schedule:run` every minute through the system cron instead. The `imports:dispatch-scheduled` command is safe to invoke independently when diagnosing scheduled work.
+
+## Notifications
+
+When an import or QuickBooks sync reaches a final state, the uploader and team members who can manage imports receive an in-app notification and email. The application header shows unread notifications; email delivery uses Laravel's normal `MAIL_*` configuration.
+
+## API intake
+
+An import manager can create and revoke a team API key from **Settings → Teams → API access**. Keys are displayed only once and stored as hashes. Use the key with the following endpoints:
+
+```bash
+curl -X POST "https://your-app.example/api/v1/teams/TEAM_SLUG/imports" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@invoices.xlsx" \
+  -F "auto_sync_qbo=true"
+
+curl "https://your-app.example/api/v1/teams/TEAM_SLUG/imports/IMPORT_ID" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+The upload endpoint returns `202 Accepted` with the import ID; poll the status endpoint for progress. API requests are rate-limited to 30 requests per minute per client.

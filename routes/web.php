@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvoiceImportController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\TeamApiTokenController;
 use App\Http\Controllers\ScheduledImportController;
 use App\Http\Controllers\QuickBooks\QuickBooksAuthController;
 use App\Http\Controllers\QuickBooks\QuickBooksSyncController;
@@ -29,9 +31,14 @@ Route::prefix('{current_team}')
         Route::get('quickbooks/callback', [QuickBooksAuthController::class, 'callback'])->name('quickbooks.callback');
         Route::delete('quickbooks/disconnect', [QuickBooksAuthController::class, 'disconnect'])->name('quickbooks.disconnect');
         Route::post('imports/{invoiceImport}/sync-qbo', [QuickBooksSyncController::class, 'sync'])->name('imports.sync-qbo');
+        Route::post('api-tokens', [TeamApiTokenController::class, 'store'])->name('api-tokens.store');
+        Route::delete('api-tokens/{apiToken}', [TeamApiTokenController::class, 'destroy'])->name('api-tokens.destroy');
     });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     Route::get('callback', [QuickBooksAuthController::class, 'callback'])->name('quickbooks.global_callback');
     Route::get('quickbooks/callback', [QuickBooksAuthController::class, 'callback'])->name('quickbooks.static_callback');
     Route::post('invitations/{invitation}/accept', [TeamInvitationController::class, 'accept'])->name('invitations.accept');

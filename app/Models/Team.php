@@ -117,6 +117,16 @@ class Team extends Model
     }
 
     /**
+     * Get the API keys that can submit imports to this team.
+     *
+     * @return HasMany<TeamApiToken, $this>
+     */
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(TeamApiToken::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

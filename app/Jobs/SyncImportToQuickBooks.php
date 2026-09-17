@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\InvoiceImportUpdated;
+use App\Actions\Imports\NotifyImportOutcome;
 use App\Models\InvoiceImport;
 use App\Models\InvoiceRecord;
 use App\Services\InvoiceSpreadsheetReader;
@@ -25,7 +26,7 @@ class SyncImportToQuickBooks implements ShouldQueue
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(QuickBooksClient $client): void
+    public function handle(QuickBooksClient $client, NotifyImportOutcome $notifyImportOutcome): void
     {
         $jobStartTime = microtime(true);
         $import = InvoiceImport::with(['team.quickbooksConnection', 'records'])->findOrFail($this->importId);
@@ -37,6 +38,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_sync_error' => 'QuickBooks is not connected for this team.',
             ]);
             $this->safeBroadcast($import, 'qbo_sync_failed');
+            $notifyImportOutcome->handle($import, 'quickbooks_sync_failed');
             return;
         }
 
@@ -64,6 +66,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_current_message' => "All {$existingSyncedCount} invoices already synced to QuickBooks Online.",
             ]);
             $this->safeBroadcast($import, 'qbo_sync_completed');
+            $notifyImportOutcome->handle($import, 'quickbooks_sync_completed');
             return;
         }
 
@@ -275,6 +278,7 @@ class SyncImportToQuickBooks implements ShouldQueue
 
         $import->refresh();
         $this->safeBroadcast($import, 'qbo_sync_completed');
+        $notifyImportOutcome->handle($import, $finalStatus === 'synced' ? 'quickbooks_sync_completed' : 'quickbooks_sync_failed');
     }
 
 
@@ -287,6 +291,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_sync_error' => 'QuickBooks sync failed: ' . $exception->getMessage(),
             ]);
             $this->safeBroadcast($import, 'qbo_sync_failed');
+            app(NotifyImportOutcome::class)->handle($import, 'quickbooks_sync_failed');
         }
     }
 
