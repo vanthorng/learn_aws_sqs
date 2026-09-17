@@ -29,8 +29,9 @@ class ProcessInvoiceImport implements ShouldQueue
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(NotifyImportOutcome $notifyImportOutcome): void
+    public function handle(?NotifyImportOutcome $notifyImportOutcome = null): void
     {
+        $notifyImportOutcome ??= app(NotifyImportOutcome::class);
         $claimed = InvoiceImport::query()
             ->whereKey($this->importId)
             ->where('status', InvoiceImportStatus::Pending->value)

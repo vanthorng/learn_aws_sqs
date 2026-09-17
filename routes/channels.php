@@ -12,3 +12,9 @@ Broadcast::channel('import.{importId}', function ($user, string $importId) {
 
     return $import !== null && $user->belongsToTeam($import->team);
 });
+
+Broadcast::channel('qbo-operation.{operationId}', function ($user, string $operationId) {
+    $operation = \App\Models\QuickbooksOperation::find($operationId);
+
+    return $operation !== null && $user->belongsToTeam($operation->team);
+});

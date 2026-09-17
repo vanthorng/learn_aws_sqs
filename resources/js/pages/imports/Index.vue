@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { AlertCircle, CheckCircle2, Clock, CloudUpload, ExternalLink, FileSpreadsheet, Loader2, RefreshCw, Send, Unlink, Upload } from '@lucide/vue';
 import { echo } from '@/echo';
@@ -287,6 +287,7 @@ onBeforeUnmount(() => {
                         <CheckCircle2 class="size-4 text-emerald-600 dark:text-emerald-400" />
                         <span>QuickBooks Connected <strong v-if="quickbooksConnection.companyName">({{ quickbooksConnection.companyName }})</strong></span>
                     </div>
+                    <Button v-if="canManageImports" variant="outline" size="sm" as-child><Link :href="`/${$page.props.currentTeam?.slug}/quickbooks/data`">QBO data</Link></Button>
                     <Button v-if="canManageImports" variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-destructive" title="Disconnect QuickBooks" @click="disconnectQuickBooks">
                         <Unlink class="mr-1 size-3.5" /> Disconnect
                     </Button>

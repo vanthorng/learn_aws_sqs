@@ -26,8 +26,9 @@ class SyncImportToQuickBooks implements ShouldQueue
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(QuickBooksClient $client, NotifyImportOutcome $notifyImportOutcome): void
+    public function handle(QuickBooksClient $client, ?NotifyImportOutcome $notifyImportOutcome = null): void
     {
+        $notifyImportOutcome ??= app(NotifyImportOutcome::class);
         $jobStartTime = microtime(true);
         $import = InvoiceImport::with(['team.quickbooksConnection', 'records'])->findOrFail($this->importId);
         $connection = $import->team->quickbooksConnection;

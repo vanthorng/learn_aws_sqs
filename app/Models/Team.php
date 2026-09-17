@@ -126,6 +126,12 @@ class Team extends Model
         return $this->hasMany(TeamApiToken::class);
     }
 
+    /** @return HasMany<QuickbooksOperation, $this> */
+    public function quickbooksOperations(): HasMany
+    {
+        return $this->hasMany(QuickbooksOperation::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

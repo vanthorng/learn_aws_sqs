@@ -186,6 +186,14 @@ test('sync job executes and creates invoices in QuickBooks', function () {
                 ],
             ], 200);
         }
+        if (str_contains($url, '/batch')) {
+            return Http::response([
+                'BatchItemResponse' => [[
+                    'bId' => 'INV0906-01',
+                    'Invoice' => ['Id' => 'qbo-inv-999'],
+                ]],
+            ], 200);
+        }
         return Http::response([], 200);
     });
 
