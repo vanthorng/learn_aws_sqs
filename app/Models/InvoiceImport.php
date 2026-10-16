@@ -25,6 +25,7 @@ class InvoiceImport extends Model
             'completed_at' => 'datetime',
             'qbo_sync_started_at' => 'datetime',
             'qbo_last_synced_at' => 'datetime',
+            'auto_sync_qbo' => 'boolean',
         ];
     }
 

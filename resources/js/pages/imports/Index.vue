@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
     AlertCircle,
@@ -503,6 +503,7 @@ onBeforeUnmount(() => {
                         <Upload class="mr-1.5 size-4" />
                         {{ uploading ? 'Uploading…' : 'Start import' }}
                     </Button>
+                </div>
                 </div>
             </CardContent>
         </Card>

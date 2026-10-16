@@ -82,6 +82,15 @@ class TeamController extends Controller
                 ]),
             'permissions' => $user->toTeamPermissions($team),
             'availableRoles' => TeamRole::assignable(),
+            'apiTokens' => $user->hasTeamPermission($team, \App\Enums\TeamPermission::ImportInvoices)
+                ? $team->apiTokens()->latest()->get()->map(fn (\App\Models\TeamApiToken $token) => [
+                    'id' => $token->id,
+                    'name' => $token->name,
+                    'lastUsedAt' => $token->last_used_at?->toIso8601String(),
+                    'createdAt' => $token->created_at->toIso8601String(),
+                    'revokedAt' => $token->revoked_at?->toIso8601String(),
+                ])
+                : [],
         ]);
     }
 

@@ -3,12 +3,17 @@
 use App\Enums\InvoiceImportStatus;
 use App\Enums\TeamRole;
 use App\Models\InvoiceImport;
+use App\Models\TeamApiToken;
 use App\Models\Team;
 use App\Models\User;
 use App\Jobs\ProcessInvoiceImport;
-use Illuminate\Http\UploadedFile;
+use App\Actions\Imports\DispatchScheduledImports;
+use App\Actions\Imports\NotifyImportOutcome;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use App\Models\ScheduledImport;
+use App\Notifications\InvoiceImportNotification;
+use Illuminate\Support\Facades\Notification;
 
 function importTestTeam(User $user, TeamRole $role = TeamRole::Owner): Team
 {
@@ -32,6 +37,21 @@ function makeInvoiceImport(Team $team, User $user, InvoiceImportStatus $status =
     ]);
 }
 
+function makeScheduledImport(Team $team, User $user, array $attributes = []): ScheduledImport
+{
+    return ScheduledImport::create(array_merge([
+        'team_id' => $team->id,
+        'created_by' => $user->id,
+        'status' => 'scheduled',
+        'scheduled_for' => now()->addHour(),
+        'storage_disk' => 'local',
+        'storage_path' => 'scheduled-imports/test.xlsx',
+        'original_filename' => 'Scheduled invoices.xlsx',
+        'file_hash' => str_repeat('b', 64),
+        'file_size' => 10,
+    ], $attributes));
+}
+
 test('team members can view their team import workspace', function () {
     $user = User::factory()->create();
     $team = importTestTeam($user, TeamRole::Member);
@@ -45,7 +65,7 @@ test('members cannot upload invoice imports', function () {
     $team = importTestTeam($user, TeamRole::Member);
 
     $this->actingAs($user)
-        ->post(route('imports.store', $team), ['file' => UploadedFile::fake()->create('Invoice.xlsx', 10)])
+        ->post(route('imports.store', $team))
         ->assertForbidden();
 });
 
@@ -85,4 +105,110 @@ test('owners can requeue a completed import with row errors', function () {
     $this->actingAs($user)->post(route('imports.retry', [$team, $import]))->assertRedirect(route('imports.index', $team));
 
     expect($import->fresh()->status)->toBe(InvoiceImportStatus::Pending);
+});
+
+test('team members can view their team schedule but not another team schedule', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user, TeamRole::Member);
+    $other = User::factory()->create();
+    $otherTeam = importTestTeam($other);
+    makeScheduledImport($team, $user);
+    makeScheduledImport($otherTeam, $other);
+
+    $this->actingAs($user)
+        ->get(route('schedules.index', $team))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('schedules', 1));
+});
+
+test('owners can cancel an upcoming scheduled import', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $schedule = makeScheduledImport($team, $user);
+
+    $this->actingAs($user)
+        ->delete(route('schedules.cancel', [$team, $schedule]))
+        ->assertRedirect(route('schedules.index', $team));
+
+    expect($schedule->fresh()->status)->toBe('cancelled')
+        ->and($schedule->fresh()->cancelled_at)->not->toBeNull();
+});
+
+test('due scheduled imports are converted into queued imports exactly once', function () {
+    Queue::fake();
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $schedule = makeScheduledImport($team, $user, ['scheduled_for' => now()->subMinute(), 'auto_sync_qbo' => true]);
+
+    expect(app(DispatchScheduledImports::class)->handle())->toBe(1);
+
+    $schedule->refresh();
+    $import = InvoiceImport::find($schedule->invoice_import_id);
+
+    expect($schedule->status)->toBe('dispatched')
+        ->and($schedule->dispatched_at)->not->toBeNull()
+        ->and($import)->not->toBeNull()
+        ->and($import->auto_sync_qbo)->toBeTrue();
+    Queue::assertPushed(ProcessInvoiceImport::class, fn (ProcessInvoiceImport $job) => $job->importId === $import->id);
+    expect(app(DispatchScheduledImports::class)->handle())->toBe(0);
+});
+
+test('team API key can only inspect imports belonging to its team', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $other = User::factory()->create();
+    $otherTeam = importTestTeam($other);
+    $import = makeInvoiceImport($team, $user);
+    $otherImport = makeInvoiceImport($otherTeam, $other);
+    $plainToken = 'imp_test_token';
+
+    TeamApiToken::create([
+        'team_id' => $team->id,
+        'created_by' => $user->id,
+        'name' => 'Test integration',
+        'token_hash' => hash('sha256', $plainToken),
+    ]);
+
+    $this->withHeader('Authorization', "Bearer {$plainToken}")
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")
+        ->assertOk()
+        ->assertJsonPath('data.id', $import->id);
+
+    $this->withHeader('Authorization', "Bearer {$plainToken}")
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$otherImport->id}")
+        ->assertNotFound();
+});
+
+test('API import endpoints reject a missing or revoked API key', function () {
+    $user = User::factory()->create();
+    $team = importTestTeam($user);
+    $import = makeInvoiceImport($team, $user);
+
+    $this->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")->assertUnauthorized();
+
+    TeamApiToken::create([
+        'team_id' => $team->id,
+        'created_by' => $user->id,
+        'name' => 'Revoked key',
+        'token_hash' => hash('sha256', 'imp_revoked_token'),
+        'revoked_at' => now(),
+    ]);
+
+    $this->withHeader('Authorization', 'Bearer imp_revoked_token')
+        ->getJson("/api/v1/teams/{$team->slug}/imports/{$import->id}")
+        ->assertUnauthorized();
+});
+
+test('import outcomes notify both the uploader and import managers', function () {
+    Notification::fake();
+    $uploader = User::factory()->create();
+    $team = importTestTeam($uploader, TeamRole::Member);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Owner->value]);
+    $import = makeInvoiceImport($team, $uploader, InvoiceImportStatus::Completed);
+
+    app(NotifyImportOutcome::class)->handle($import, 'import_completed');
+
+    Notification::assertSentTo($uploader, InvoiceImportNotification::class);
+    Notification::assertSentTo($manager, InvoiceImportNotification::class);
 });

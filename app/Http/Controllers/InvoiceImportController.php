@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Imports\CreateInvoiceImport;
 use App\Enums\InvoiceImportStatus;
 use App\Enums\TeamPermission;
 use App\Http\Requests\StoreInvoiceImportRequest;
 use App\Jobs\ProcessInvoiceImport;
 use App\Models\InvoiceImport;
 use App\Models\Team;
-use App\Services\InvoiceSpreadsheetReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,35 +34,10 @@ class InvoiceImportController extends Controller
         ]);
     }
 
-    public function store(StoreInvoiceImportRequest $request, Team $current_team): RedirectResponse
+    public function store(StoreInvoiceImportRequest $request, Team $current_team, CreateInvoiceImport $createImport): RedirectResponse
     {
         $this->ensureCanManage($request, $current_team);
-        $file = $request->file('file');
-
-        try {
-            (new InvoiceSpreadsheetReader($file->getRealPath()))->assertValidTemplate();
-        } catch (\Throwable $exception) {
-            throw ValidationException::withMessages(['file' => $exception->getMessage()]);
-        }
-
-        $diskName = config('imports.disk');
-        $fileHash = hash_file('sha256', $file->getRealPath());
-        $path = $file->store('imports/'.$current_team->id, $diskName);
-        $import = DB::transaction(function () use ($request, $current_team, $file, $fileHash, $diskName, $path): InvoiceImport {
-            return InvoiceImport::create([
-                'team_id' => $current_team->id,
-                'uploaded_by' => $request->user()->id,
-                'status' => InvoiceImportStatus::Pending,
-                'storage_disk' => $diskName,
-                'storage_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'file_hash' => $fileHash,
-                'file_size' => $file->getSize(),
-                'auto_sync_qbo' => $request->boolean('auto_sync_qbo'),
-            ]);
-        });
-
-        $this->dispatch($import);
+        $createImport->handle($current_team, $request->user(), $request->file('file'), $request->boolean('auto_sync_qbo'));
 
         return to_route('imports.index', $current_team)->with('toast', ['type' => 'success', 'message' => 'Invoice import queued.']);
     }

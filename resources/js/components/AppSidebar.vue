@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FileSpreadsheet, FolderGit2, LayoutGrid } from '@lucide/vue';
+import { BookOpen, CalendarClock, FileSpreadsheet, FolderGit2, LayoutGrid, TableProperties } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -32,7 +32,11 @@ const mainNavItems = computed<NavItem[]>(() => [
         icon: LayoutGrid,
     },
     ...(page.props.currentTeam
-        ? [{ title: 'Invoice imports', href: `/${page.props.currentTeam.slug}/imports`, icon: FileSpreadsheet }]
+        ? [
+            { title: 'Invoice imports', href: `/${page.props.currentTeam.slug}/imports`, icon: FileSpreadsheet },
+            { title: 'QBO data', href: `/${page.props.currentTeam.slug}/quickbooks/data`, icon: TableProperties },
+            { title: 'Schedule', href: `/${page.props.currentTeam.slug}/schedule`, icon: CalendarClock },
+        ]
         : []),
 ]);
 
