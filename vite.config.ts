@@ -2,7 +2,7 @@ import inertia from '@inertiajs/vite';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig, lazyPlugins } from 'vite-plus';
@@ -25,7 +25,13 @@ export default defineConfig({
                 // Vite+ does not currently expose Node's file system to
                 // compiler-sfc, so provide it explicitly for imported props.
                 fs: {
-                    fileExists: existsSync,
+                    fileExists: (file) => {
+                        try {
+                            return statSync(file).isFile();
+                        } catch {
+                            return false;
+                        }
+                    },
                     readFile: (file) => readFileSync(file, 'utf8'),
                     realpath: realpathSync,
                 },
