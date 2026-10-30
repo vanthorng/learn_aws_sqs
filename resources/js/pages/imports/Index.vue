@@ -504,7 +504,6 @@ onBeforeUnmount(() => {
                         {{ uploading ? 'Uploading…' : 'Start import' }}
                     </Button>
                 </div>
-                </div>
             </CardContent>
         </Card>
 
