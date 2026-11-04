@@ -2,6 +2,7 @@ import inertia from '@inertiajs/vite';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig, lazyPlugins } from 'vite-plus';
@@ -20,6 +21,21 @@ export default defineConfig({
         inertia(),
         tailwindcss(),
         vue({
+            script: {
+                // Vite+ does not currently expose Node's file system to
+                // compiler-sfc, so provide it explicitly for imported props.
+                fs: {
+                    fileExists: (file) => {
+                        try {
+                            return statSync(file).isFile();
+                        } catch {
+                            return false;
+                        }
+                    },
+                    readFile: (file) => readFileSync(file, 'utf8'),
+                    realpath: realpathSync,
+                },
+            },
             template: {
                 transformAssetUrls: {
                     base: null,
@@ -27,15 +43,9 @@ export default defineConfig({
                 },
             },
         }),
-        // Vercel runs `composer run vercel`, which generates Wayfinder routes
-        // before Vite starts. Locally this plugin keeps those files current.
-        ...(process.env.VERCEL
-            ? []
-            : [
-                  wayfinder({
-                      formVariants: true,
-                  }),
-              ]),
+        wayfinder({
+            formVariants: true,
+        }),
     ]),
     server: {
         watch: {

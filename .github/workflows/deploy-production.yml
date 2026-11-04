@@ -1,0 +1,128 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [production]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: Deploy Elastic Beanstalk
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      EB_APPLICATION_NAME: ${{ vars.EB_APPLICATION_NAME }}
+      EB_ENVIRONMENT_NAME: ${{ vars.EB_ENVIRONMENT_NAME }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      VITE_PUSHER_APP_KEY: ${{ secrets.VITE_PUSHER_APP_KEY }}
+      VITE_PUSHER_APP_CLUSTER: ${{ secrets.VITE_PUSHER_APP_CLUSTER }}
+
+    steps:
+      - name: Check out the verified production commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Validate deployment configuration
+        run: |
+          required=(AWS_REGION AWS_ROLE_ARN EB_APPLICATION_NAME EB_ENVIRONMENT_NAME)
+
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing GitHub production environment variable: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install production dependencies and build assets
+        run: |
+          composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+          npm ci
+          npm run build
+
+      - name: Create Elastic Beanstalk source bundle
+        id: bundle
+        run: |
+          version_label="github-${GITHUB_RUN_ID}-${DEPLOY_SHA::7}"
+          bundle_key="${EB_APPLICATION_NAME}/${version_label}.zip"
+
+          zip -qr deployment.zip . \
+            -x '.git/*' \
+            -x '.github/*' \
+            -x '.env' \
+            -x '.env.*' \
+            -x 'node_modules/*' \
+            -x 'tests/*' \
+            -x 'storage/logs/*' \
+            -x 'storage/framework/cache/*' \
+            -x 'storage/framework/sessions/*' \
+            -x 'storage/framework/views/*' \
+            -x 'bootstrap/cache/*.php' \
+            -x 'deployment.zip'
+
+          printf 'version_label=%s\n' "$version_label" >> "$GITHUB_OUTPUT"
+          printf 'bundle_key=%s\n' "$bundle_key" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-eb-deploy
+
+      - name: Resolve Elastic Beanstalk storage location
+        run: |
+          artifact_bucket="$(aws elasticbeanstalk create-storage-location --query S3Bucket --output text)"
+          test -n "$artifact_bucket" && test "$artifact_bucket" != "None"
+          printf 'EB_ARTIFACT_BUCKET=%s\n' "$artifact_bucket" >> "$GITHUB_ENV"
+
+      - name: Upload and deploy application version
+        env:
+          VERSION_LABEL: ${{ steps.bundle.outputs.version_label }}
+          BUNDLE_KEY: ${{ steps.bundle.outputs.bundle_key }}
+        run: |
+          aws s3 cp deployment.zip "s3://${EB_ARTIFACT_BUCKET}/${BUNDLE_KEY}"
+
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION_NAME" \
+            --version-label "$VERSION_LABEL" \
+            --source-bundle "S3Bucket=${EB_ARTIFACT_BUCKET},S3Key=${BUNDLE_KEY}" \
+            --process
+
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENVIRONMENT_NAME" \
+            --version-label "$VERSION_LABEL"
+
+          aws elasticbeanstalk wait environment-updated \
+            --environment-names "$EB_ENVIRONMENT_NAME"

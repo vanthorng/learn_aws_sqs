@@ -23,7 +23,7 @@ class InvoiceSpreadsheetReader
         foreach ($this->rows() as $row) {
             if (! $headerFound) {
                 $headerFound = true;
-                if (array_values($row['values']) !== self::HEADERS) {
+                if ($row['values'] !== self::HEADERS) {
                     throw new RuntimeException('The file must contain an Invoice sheet with the supported invoice headers.');
                 }
             } elseif ($this->isPopulated($row['values'])) {
@@ -46,7 +46,8 @@ class InvoiceSpreadsheetReader
 
         foreach ($rows as $row) {
             if ($headers === null) {
-                $headers = array_values($row['values']);
+                $headers = $row['values'];
+
                 continue;
             }
 
@@ -54,14 +55,16 @@ class InvoiceSpreadsheetReader
                 continue;
             }
 
+            $values = array_combine($headers, $row['values']);
+
             yield [
                 'rowNumber' => $row['rowNumber'],
-                'values' => array_combine($headers, array_values($row['values'])),
+                'values' => $values,
             ];
         }
     }
 
-    /** @return \Generator<int, array{rowNumber: int, values: list<string|null>}> */
+    /** @return \Generator<int, array{rowNumber: int, values: array<int, string|null>}> */
     private function rows(): \Generator
     {
         $reader = new XMLReader;
@@ -80,6 +83,9 @@ class InvoiceSpreadsheetReader
                 $rowNumber = (int) $reader->getAttribute('r');
                 $rowXml = $reader->readOuterXml();
                 $xml = simplexml_load_string($rowXml);
+                if ($xml === false) {
+                    throw new RuntimeException('Unable to parse an Invoice worksheet row.');
+                }
                 $values = array_fill(0, count(self::HEADERS), null);
 
                 foreach ($xml->c as $cell) {
@@ -141,7 +147,7 @@ class InvoiceSpreadsheetReader
         return $index - 1;
     }
 
-    /** @param list<string|null> $values */
+    /** @param array<int, string|null> $values */
     private function isPopulated(array $values): bool
     {
         return collect($values)->contains(fn ($value) => $value !== null && $value !== '');

@@ -8,6 +8,8 @@ use App\Models\InvoiceRecord;
 use App\Models\QuickbooksConnection;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\QuickBooks\QuickBooksClient;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
@@ -160,7 +162,7 @@ test('sync job executes and creates invoices in QuickBooks', function () {
         ],
     ]);
 
-    Http::fake(function (\Illuminate\Http\Client\Request $request) {
+    Http::fake(function (Request $request) {
         $url = $request->url();
         if (str_contains($url, '/query')) {
             if (str_contains($url, 'Customer')) {
@@ -186,11 +188,20 @@ test('sync job executes and creates invoices in QuickBooks', function () {
                 ],
             ], 200);
         }
+        if (str_contains($url, '/batch')) {
+            return Http::response([
+                'BatchItemResponse' => [[
+                    'bId' => 'INV0906-01',
+                    'Invoice' => ['Id' => 'qbo-inv-999'],
+                ]],
+            ], 200);
+        }
+
         return Http::response([], 200);
     });
 
     $job = new SyncImportToQuickBooks($import->id);
-    $job->handle(new \App\Services\QuickBooks\QuickBooksClient());
+    $job->handle(new QuickBooksClient);
 
     $import->refresh();
     expect($import->qbo_sync_status)->toBe('synced')

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Actions\Imports\NotifyImportOutcome;
 use App\Events\InvoiceImportUpdated;
 use App\Models\InvoiceImport;
 use App\Models\InvoiceRecord;
@@ -12,7 +13,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -21,12 +21,14 @@ class SyncImportToQuickBooks implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $timeout = 3600;
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(QuickBooksClient $client): void
+    public function handle(QuickBooksClient $client, ?NotifyImportOutcome $notifyImportOutcome = null): void
     {
+        $notifyImportOutcome ??= app(NotifyImportOutcome::class);
         $jobStartTime = microtime(true);
         $import = InvoiceImport::with(['team.quickbooksConnection', 'records'])->findOrFail($this->importId);
         $connection = $import->team->quickbooksConnection;
@@ -37,6 +39,8 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_sync_error' => 'QuickBooks is not connected for this team.',
             ]);
             $this->safeBroadcast($import, 'qbo_sync_failed');
+            $notifyImportOutcome->handle($import, 'quickbooks_sync_failed');
+
             return;
         }
 
@@ -53,7 +57,7 @@ class SyncImportToQuickBooks implements ShouldQueue
             'qbo_total_invoices' => $totalInvoices,
             'qbo_synced_count' => $existingSyncedCount,
             'qbo_failed_count' => 0,
-            'qbo_current_message' => "Connecting to QuickBooks Online and preloading catalog...",
+            'qbo_current_message' => 'Connecting to QuickBooks Online and preloading catalog...',
         ]);
         $this->safeBroadcast($import, 'qbo_sync_started');
 
@@ -64,6 +68,8 @@ class SyncImportToQuickBooks implements ShouldQueue
                 'qbo_current_message' => "All {$existingSyncedCount} invoices already synced to QuickBooks Online.",
             ]);
             $this->safeBroadcast($import, 'qbo_sync_completed');
+            $notifyImportOutcome->handle($import, 'quickbooks_sync_completed');
+
             return;
         }
 
@@ -143,7 +149,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                     }
 
                     // 3. Assemble Invoice Payload
-                    $txnDate = $firstLine->txn_date?->toDateString()
+                    $txnDate = $firstLine->txn_date->toDateString()
                         ?: InvoiceSpreadsheetReader::spreadsheetDate($payload['Txn Date'] ?? null)
                         ?: now()->toDateString();
                     $dueDate = InvoiceSpreadsheetReader::spreadsheetDate($payload['Due Date'] ?? null);
@@ -212,7 +218,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                         $lines = $batchDocs[$docNumber];
                         $res = $results[$docNumber] ?? null;
 
-                        if ($res && ! empty($res['success'])) {
+                        if ($res !== null && $res['success'] && isset($res['invoiceId'])) {
                             $syncedCount++;
                             InvoiceRecord::whereIn('id', $lines->pluck('id'))->update([
                                 'qbo_invoice_id' => $res['invoiceId'],
@@ -229,7 +235,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                         }
                     }
                 } catch (Throwable $batchEx) {
-                    Log::error("Batch {$batchNumber} execution failed: " . $batchEx->getMessage());
+                    Log::error("Batch {$batchNumber} execution failed: ".$batchEx->getMessage());
                     foreach ($batchPayloads as $item) {
                         $docNumber = $item['bId'];
                         $lines = $batchDocs[$docNumber];
@@ -245,7 +251,7 @@ class SyncImportToQuickBooks implements ShouldQueue
             $elapsedSec = max(1, (int) round(microtime(true) - $jobStartTime));
             $elapsedStr = $elapsedSec >= 60 ? sprintf('%dm %02ds', intdiv($elapsedSec, 60), $elapsedSec % 60) : "{$elapsedSec}s";
 
-            $failNotice = $failedCount > 0 ? " ({$failedCount} with notices, queue continuing)" : "";
+            $failNotice = $failedCount > 0 ? " ({$failedCount} with notices, queue continuing)" : '';
             $currentMsg = "Batch {$batchNumber}/{$totalBatches} finished ({$elapsedStr}): {$syncedCount}/{$totalInvoices} synced{$failNotice}.";
             $import->update([
                 'qbo_synced_count' => $syncedCount,
@@ -275,8 +281,8 @@ class SyncImportToQuickBooks implements ShouldQueue
 
         $import->refresh();
         $this->safeBroadcast($import, 'qbo_sync_completed');
+        $notifyImportOutcome->handle($import, $finalStatus === 'synced' ? 'quickbooks_sync_completed' : 'quickbooks_sync_failed');
     }
-
 
     public function failed(Throwable $exception): void
     {
@@ -284,9 +290,10 @@ class SyncImportToQuickBooks implements ShouldQueue
         if ($import) {
             $import->update([
                 'qbo_sync_status' => 'failed',
-                'qbo_sync_error' => 'QuickBooks sync failed: ' . $exception->getMessage(),
+                'qbo_sync_error' => 'QuickBooks sync failed: '.$exception->getMessage(),
             ]);
             $this->safeBroadcast($import, 'qbo_sync_failed');
+            app(NotifyImportOutcome::class)->handle($import, 'quickbooks_sync_failed');
         }
     }
 
@@ -294,8 +301,8 @@ class SyncImportToQuickBooks implements ShouldQueue
     {
         try {
             event(new InvoiceImportUpdated($import, $event));
-        } catch (\Throwable $e) {
-            Log::warning("Broadcasting {$event} failed: " . $e->getMessage());
+        } catch (Throwable $e) {
+            Log::warning("Broadcasting {$event} failed: ".$e->getMessage());
         }
     }
 }

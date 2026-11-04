@@ -14,28 +14,38 @@ class InvoiceImportUpdated implements ShouldBroadcastNow
 
     public function __construct(public InvoiceImport $invoiceImport, private readonly string $event) {}
 
-    public function broadcastOn(): array { return [new PrivateChannel('import.'.$this->invoiceImport->id)]; }
-    public function broadcastAs(): string { return 'import.'.$this->event; }
+    /** @return array<int, PrivateChannel> */
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel('import.'.$this->invoiceImport->id)];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'import.'.$this->event;
+    }
+
+    /** @return array<string, int|string|null> */
     public function broadcastWith(): array
     {
         $parseDuration = null;
         if ($this->invoiceImport->started_at && $this->invoiceImport->completed_at) {
             $diff = max(1, $this->invoiceImport->completed_at->diffInSeconds($this->invoiceImport->started_at));
-            $parseDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $parseDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         $qboSyncDuration = null;
         $syncStart = $this->invoiceImport->qbo_sync_started_at ?? $this->invoiceImport->completed_at ?? $this->invoiceImport->started_at;
         if ($syncStart && $this->invoiceImport->qbo_last_synced_at) {
             $diff = max(1, $this->invoiceImport->qbo_last_synced_at->diffInSeconds($syncStart));
-            $qboSyncDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $qboSyncDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         $totalDuration = null;
         $finalEnd = $this->invoiceImport->qbo_last_synced_at ?? $this->invoiceImport->completed_at;
         if ($this->invoiceImport->started_at && $finalEnd) {
             $diff = max(1, $finalEnd->diffInSeconds($this->invoiceImport->started_at));
-            $totalDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $totalDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         return [

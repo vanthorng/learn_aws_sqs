@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Actions\Imports\NotifyImportOutcome;
 use App\Enums\InvoiceImportStatus;
 use App\Events\InvoiceImportUpdated;
 use App\Models\InvoiceImport;
@@ -17,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Throwable;
 
 class ProcessInvoiceImport implements ShouldQueue
@@ -24,12 +26,15 @@ class ProcessInvoiceImport implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
+    /** @var list<int> */
     public array $backoff = [30, 120, 300];
 
     public function __construct(public readonly string $importId) {}
 
-    public function handle(): void
+    public function handle(?NotifyImportOutcome $notifyImportOutcome = null): void
     {
+        $notifyImportOutcome ??= app(NotifyImportOutcome::class);
         $claimed = InvoiceImport::query()
             ->whereKey($this->importId)
             ->where('status', InvoiceImportStatus::Pending->value)
@@ -70,8 +75,9 @@ class ProcessInvoiceImport implements ShouldQueue
             $import->update(['status' => InvoiceImportStatus::Completed, 'percentage' => 100, 'completed_at' => now()]);
             $import->refresh();
             $this->safeBroadcast($import, 'completed');
+            $notifyImportOutcome->handle($import, 'import_completed');
 
-            if ($import->auto_sync_qbo && $import->team?->quickbooksConnection) {
+            if ($import->auto_sync_qbo && $import->team->quickbooksConnection) {
                 SyncImportToQuickBooks::dispatch($import->id)
                     ->onConnection(config('imports.queue_connection'))
                     ->onQueue(config('imports.queue'));
@@ -79,7 +85,7 @@ class ProcessInvoiceImport implements ShouldQueue
         } catch (Throwable $exception) {
             $import->update([
                 'status' => InvoiceImportStatus::Pending->value,
-                'error_summary' => 'Import attempt error: ' . $exception->getMessage(),
+                'error_summary' => 'Import attempt error: '.$exception->getMessage(),
             ]);
             Log::warning('Invoice import attempt failed.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
             throw $exception;
@@ -100,20 +106,21 @@ class ProcessInvoiceImport implements ShouldQueue
         $import->update([
             'status' => InvoiceImportStatus::Failed,
             'completed_at' => now(),
-            'error_summary' => 'Import failed: ' . $exception->getMessage(),
+            'error_summary' => 'Import failed: '.$exception->getMessage(),
         ]);
         $import->refresh();
         Log::error('Invoice import failed permanently.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
         $this->sendToDeadLetterQueue($import, $exception);
         $this->safeBroadcast($import, 'failed');
+        app(NotifyImportOutcome::class)->handle($import, 'import_failed');
     }
 
     private function safeBroadcast(InvoiceImport $import, string $event): void
     {
         try {
             event(new InvoiceImportUpdated($import, $event));
-        } catch (\Throwable $e) {
-            Log::warning("Broadcasting {$event} failed: " . $e->getMessage());
+        } catch (Throwable $e) {
+            Log::warning("Broadcasting {$event} failed: ".$e->getMessage());
         }
     }
 
@@ -203,6 +210,11 @@ class ProcessInvoiceImport implements ShouldQueue
             throw new RuntimeException("Unable to read import file from S3: {$import->storage_path}");
         }
         $destination = fopen($temporaryPath, 'wb');
+        if ($destination === false) {
+            fclose($source);
+
+            throw new RuntimeException("Unable to create temporary import file: {$temporaryPath}");
+        }
         stream_copy_to_stream($source, $destination);
         fclose($destination);
         fclose($source);
@@ -223,10 +235,12 @@ class ProcessInvoiceImport implements ShouldQueue
                 : rtrim((string) config('queue.connections.sqs.prefix'), '/').'/'.$queue.config('queue.connections.sqs.suffix');
             $clientConfig = [
                 'version' => 'latest',
-                'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+                'region' => config('queue.connections.sqs.region', 'us-east-1'),
             ];
-            if (filled(env('AWS_ACCESS_KEY_ID'))) {
-                $clientConfig['credentials'] = ['key' => env('AWS_ACCESS_KEY_ID'), 'secret' => env('AWS_SECRET_ACCESS_KEY')];
+            $key = config('queue.connections.sqs.key');
+            $secret = config('queue.connections.sqs.secret');
+            if (filled($key) && filled($secret)) {
+                $clientConfig['credentials'] = ['key' => $key, 'secret' => $secret];
             }
             (new SqsClient($clientConfig))->sendMessage([
                 'QueueUrl' => $queueUrl,

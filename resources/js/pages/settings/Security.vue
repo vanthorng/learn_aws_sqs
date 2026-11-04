@@ -11,7 +11,7 @@ import { edit } from '@/routes/security';
 // oxfmt-ignore
 type Props = {
     passwordRules: string;
-} ;
+};
 
 const props = defineProps<Props>();
 

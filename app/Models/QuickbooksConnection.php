@@ -2,14 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $team_id
+ * @property string $realm_id
+ * @property string $access_token
+ * @property string $refresh_token
+ * @property Carbon $access_token_expires_at
+ * @property Carbon $refresh_token_expires_at
+ * @property string|null $company_name
+ * @property string $environment
+ * @property-read Team $team
+ */
 class QuickbooksConnection extends Model
 {
-    use HasFactory;
-
     protected $guarded = [];
 
     protected function casts(): array
@@ -22,6 +32,7 @@ class QuickbooksConnection extends Model
         ];
     }
 
+    /** @return BelongsTo<Team, $this> */
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);

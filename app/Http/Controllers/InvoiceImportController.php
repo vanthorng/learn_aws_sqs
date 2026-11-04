@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Imports\CreateInvoiceImport;
 use App\Enums\InvoiceImportStatus;
 use App\Enums\TeamPermission;
 use App\Http\Requests\StoreInvoiceImportRequest;
 use App\Jobs\ProcessInvoiceImport;
 use App\Models\InvoiceImport;
 use App\Models\Team;
-use App\Services\InvoiceSpreadsheetReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,35 +34,10 @@ class InvoiceImportController extends Controller
         ]);
     }
 
-    public function store(StoreInvoiceImportRequest $request, Team $current_team): RedirectResponse
+    public function store(StoreInvoiceImportRequest $request, Team $current_team, CreateInvoiceImport $createImport): RedirectResponse
     {
         $this->ensureCanManage($request, $current_team);
-        $file = $request->file('file');
-
-        try {
-            (new InvoiceSpreadsheetReader($file->getRealPath()))->assertValidTemplate();
-        } catch (\Throwable $exception) {
-            throw ValidationException::withMessages(['file' => $exception->getMessage()]);
-        }
-
-        $diskName = config('imports.disk');
-        $fileHash = hash_file('sha256', $file->getRealPath());
-        $path = $file->store('imports/'.$current_team->id, $diskName);
-        $import = DB::transaction(function () use ($request, $current_team, $file, $fileHash, $diskName, $path): InvoiceImport {
-            return InvoiceImport::create([
-                'team_id' => $current_team->id,
-                'uploaded_by' => $request->user()->id,
-                'status' => InvoiceImportStatus::Pending,
-                'storage_disk' => $diskName,
-                'storage_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'file_hash' => $fileHash,
-                'file_size' => $file->getSize(),
-                'auto_sync_qbo' => $request->boolean('auto_sync_qbo'),
-            ]);
-        });
-
-        $this->dispatch($import);
+        $createImport->handle($current_team, $request->user(), $request->file('file'), $request->boolean('auto_sync_qbo'));
 
         return to_route('imports.index', $current_team)->with('toast', ['type' => 'success', 'message' => 'Invoice import queued.']);
     }
@@ -95,9 +68,7 @@ class InvoiceImportController extends Controller
                 'lineItem' => $record->line_item,
                 'lineAmount' => $record->line_amount,
                 'qboInvoiceId' => $record->qbo_invoice_id,
-                'qboSyncedAt' => $record->qbo_synced_at instanceof \Carbon\CarbonInterface
-                    ? $record->qbo_synced_at->toIso8601String()
-                    : ($record->qbo_synced_at ? (string) $record->qbo_synced_at : null),
+                'qboSyncedAt' => $record->qbo_synced_at?->toIso8601String(),
                 'qboSyncError' => $record->qbo_sync_error,
             ]),
         ]);
@@ -154,26 +125,27 @@ class InvoiceImportController extends Controller
         abort_unless($import->team_id === $team->id, 404);
     }
 
+    /** @return array<string, bool|int|string|null> */
     private function summary(InvoiceImport $import): array
     {
         $parseDuration = null;
         if ($import->started_at && $import->completed_at) {
             $diff = max(1, $import->completed_at->diffInSeconds($import->started_at));
-            $parseDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $parseDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         $qboSyncDuration = null;
         $syncStart = $import->qbo_sync_started_at ?? $import->completed_at ?? $import->started_at;
         if ($syncStart && $import->qbo_last_synced_at) {
             $diff = max(1, $import->qbo_last_synced_at->diffInSeconds($syncStart));
-            $qboSyncDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $qboSyncDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         $totalDuration = null;
         $finalEnd = $import->qbo_last_synced_at ?? $import->completed_at;
         if ($import->started_at && $finalEnd) {
             $diff = max(1, $finalEnd->diffInSeconds($import->started_at));
-            $totalDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv($diff, 60), $diff % 60) : "{$diff}s";
+            $totalDuration = $diff >= 60 ? sprintf('%dm %02ds', intdiv((int) $diff, 60), $diff % 60) : "{$diff}s";
         }
 
         return [
@@ -194,9 +166,7 @@ class InvoiceImportController extends Controller
             'qboFailedCount' => $import->qbo_failed_count ?? 0,
             'qboTotalInvoices' => $import->qbo_total_invoices ?? 0,
             'qboCurrentMessage' => $import->qbo_current_message,
-            'qboLastSyncedAt' => $import->qbo_last_synced_at instanceof \Carbon\CarbonInterface
-                ? $import->qbo_last_synced_at->toIso8601String()
-                : ($import->qbo_last_synced_at ? (string) $import->qbo_last_synced_at : null),
+            'qboLastSyncedAt' => $import->qbo_last_synced_at?->toIso8601String(),
             'qboSyncError' => $import->qbo_sync_error,
             'parseDuration' => $parseDuration,
             'qboSyncDuration' => $qboSyncDuration,
