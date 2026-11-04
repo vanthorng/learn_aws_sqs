@@ -28,7 +28,9 @@ class ExportQuickbooksInvoices implements ShouldQueue
     {
         $operation = QuickbooksOperation::with(['team.quickbooksConnection', 'requester'])->findOrFail($this->operationId);
         $connection = $operation->team->quickbooksConnection;
-        if (! $connection) throw new \RuntimeException('QuickBooks is no longer connected for this team.');
+        if (! $connection) {
+            throw new \RuntimeException('QuickBooks is no longer connected for this team.');
+        }
 
         $operation->update(['status' => 'processing', 'started_at' => now(), 'error_summary' => null]);
         $this->broadcast($operation);
@@ -93,6 +95,9 @@ class ExportQuickbooksInvoices implements ShouldQueue
 
     private function broadcast(QuickbooksOperation $operation): void
     {
-        try { event(new QuickbooksOperationUpdated($operation)); } catch (Throwable) {}
+        try {
+            event(new QuickbooksOperationUpdated($operation));
+        } catch (Throwable) {
+        }
     }
 }

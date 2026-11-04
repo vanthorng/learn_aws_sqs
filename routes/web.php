@@ -3,11 +3,11 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvoiceImportController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\TeamApiTokenController;
-use App\Http\Controllers\ScheduledImportController;
 use App\Http\Controllers\QuickBooks\QuickBooksAuthController;
-use App\Http\Controllers\QuickBooks\QuickBooksSyncController;
 use App\Http\Controllers\QuickBooks\QuickBooksDataController;
+use App\Http\Controllers\QuickBooks\QuickBooksSyncController;
+use App\Http\Controllers\ScheduledImportController;
+use App\Http\Controllers\TeamApiTokenController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;

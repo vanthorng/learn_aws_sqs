@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
-import { ChevronDown, Copy, KeyRound, Mail, Trash2, UserPlus, X } from '@lucide/vue';
+import {
+    ChevronDown,
+    Copy,
+    KeyRound,
+    Mail,
+    Trash2,
+    UserPlus,
+    X,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CancelInvitationModal from '@/components/CancelInvitationModal.vue';
 import DeleteTeamModal from '@/components/DeleteTeamModal.vue';
@@ -42,7 +50,13 @@ type Props = {
     invitations: TeamInvitation[];
     permissions: TeamPermissions;
     availableRoles: RoleOption[];
-    apiTokens: Array<{ id: string; name: string; lastUsedAt: string | null; createdAt: string; revokedAt: string | null }>;
+    apiTokens: Array<{
+        id: string;
+        name: string;
+        lastUsedAt: string | null;
+        createdAt: string;
+        revokedAt: string | null;
+    }>;
 };
 
 const props = defineProps<Props>();
@@ -102,19 +116,30 @@ const createApiToken = () => {
     if (!apiTokenName.value.trim()) return;
 
     creatingApiToken.value = true;
-    router.post(`/${props.team.slug}/api-tokens`, { name: apiTokenName.value }, {
-        preserveScroll: true,
-        onSuccess: () => { apiTokenName.value = ''; },
-        onFinish: () => { creatingApiToken.value = false; },
-    });
+    router.post(
+        `/${props.team.slug}/api-tokens`,
+        { name: apiTokenName.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                apiTokenName.value = '';
+            },
+            onFinish: () => {
+                creatingApiToken.value = false;
+            },
+        },
+    );
 };
 
 const revokeApiToken = (tokenId: string) => {
-    router.delete(`/${props.team.slug}/api-tokens/${tokenId}`, { preserveScroll: true });
+    router.delete(`/${props.team.slug}/api-tokens/${tokenId}`, {
+        preserveScroll: true,
+    });
 };
 
 const copyApiToken = async () => {
-    if (newApiToken.value) await navigator.clipboard.writeText(newApiToken.value);
+    if (newApiToken.value)
+        await navigator.clipboard.writeText(newApiToken.value);
 };
 </script>
 
@@ -337,7 +362,10 @@ const copyApiToken = async () => {
                 description="Create a team API key for automated XLSX uploads."
             />
             <div class="space-y-4 rounded-lg border p-4">
-                <form class="flex flex-col gap-2 sm:flex-row" @submit.prevent="createApiToken">
+                <form
+                    class="flex flex-col gap-2 sm:flex-row"
+                    @submit.prevent="createApiToken"
+                >
                     <Input
                         v-model="apiTokenName"
                         maxlength="100"
@@ -349,30 +377,73 @@ const copyApiToken = async () => {
                     </Button>
                 </form>
 
-                <div v-if="newApiToken" class="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30">
-                    <p class="text-sm font-medium">Copy this API key now — it will not be shown again.</p>
+                <div
+                    v-if="newApiToken"
+                    class="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30"
+                >
+                    <p class="text-sm font-medium">
+                        Copy this API key now — it will not be shown again.
+                    </p>
                     <div class="mt-2 flex gap-2">
-                        <code class="min-w-0 flex-1 break-all rounded bg-background p-2 text-xs">{{ newApiToken }}</code>
-                        <Button type="button" variant="outline" size="icon" @click="copyApiToken"><Copy class="size-4" /></Button>
+                        <code
+                            class="bg-background min-w-0 flex-1 rounded p-2 text-xs break-all"
+                            >{{ newApiToken }}</code
+                        >
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            @click="copyApiToken"
+                            ><Copy class="size-4"
+                        /></Button>
                     </div>
                 </div>
 
                 <div class="space-y-2">
-                    <div v-for="token in apiTokens" :key="token.id" class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+                    <div
+                        v-for="token in apiTokens"
+                        :key="token.id"
+                        class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                    >
                         <div>
                             <p class="font-medium">{{ token.name }}</p>
-                            <p class="text-xs text-muted-foreground">{{ token.revokedAt ? 'Revoked' : token.lastUsedAt ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'Never used' }}</p>
+                            <p class="text-muted-foreground text-xs">
+                                {{
+                                    token.revokedAt
+                                        ? 'Revoked'
+                                        : token.lastUsedAt
+                                          ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}`
+                                          : 'Never used'
+                                }}
+                            </p>
                         </div>
-                        <Button v-if="!token.revokedAt" type="button" variant="ghost" size="icon" class="text-destructive" @click="revokeApiToken(token.id)">
-                            <Trash2 class="size-4" /><span class="sr-only">Revoke API key</span>
+                        <Button
+                            v-if="!token.revokedAt"
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            class="text-destructive"
+                            @click="revokeApiToken(token.id)"
+                        >
+                            <Trash2 class="size-4" /><span class="sr-only"
+                                >Revoke API key</span
+                            >
                         </Button>
                     </div>
-                    <p v-if="!apiTokens.length" class="text-sm text-muted-foreground">No API keys created yet.</p>
+                    <p
+                        v-if="!apiTokens.length"
+                        class="text-muted-foreground text-sm"
+                    >
+                        No API keys created yet.
+                    </p>
                 </div>
 
-                <p class="text-xs leading-5 text-muted-foreground">
-                    POST a workbook to <code>/api/v1/teams/{{ team.slug }}/imports</code> with <code>Authorization: Bearer YOUR_KEY</code>.
-                    GET <code>/api/v1/teams/{{ team.slug }}/imports/{id}</code> to check its status.
+                <p class="text-muted-foreground text-xs leading-5">
+                    POST a workbook to
+                    <code>/api/v1/teams/{{ team.slug }}/imports</code> with
+                    <code>Authorization: Bearer YOUR_KEY</code>. GET
+                    <code>/api/v1/teams/{{ team.slug }}/imports/{id}</code> to
+                    check its status.
                 </p>
             </div>
         </div>

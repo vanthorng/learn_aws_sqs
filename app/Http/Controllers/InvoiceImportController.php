@@ -9,6 +9,7 @@ use App\Http\Requests\StoreInvoiceImportRequest;
 use App\Jobs\ProcessInvoiceImport;
 use App\Models\InvoiceImport;
 use App\Models\Team;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,7 @@ class InvoiceImportController extends Controller
                 'lineItem' => $record->line_item,
                 'lineAmount' => $record->line_amount,
                 'qboInvoiceId' => $record->qbo_invoice_id,
-                'qboSyncedAt' => $record->qbo_synced_at instanceof \Carbon\CarbonInterface
+                'qboSyncedAt' => $record->qbo_synced_at instanceof CarbonInterface
                     ? $record->qbo_synced_at->toIso8601String()
                     : ($record->qbo_synced_at ? (string) $record->qbo_synced_at : null),
                 'qboSyncError' => $record->qbo_sync_error,
@@ -167,7 +168,7 @@ class InvoiceImportController extends Controller
             'qboFailedCount' => $import->qbo_failed_count ?? 0,
             'qboTotalInvoices' => $import->qbo_total_invoices ?? 0,
             'qboCurrentMessage' => $import->qbo_current_message,
-            'qboLastSyncedAt' => $import->qbo_last_synced_at instanceof \Carbon\CarbonInterface
+            'qboLastSyncedAt' => $import->qbo_last_synced_at instanceof CarbonInterface
                 ? $import->qbo_last_synced_at->toIso8601String()
                 : ($import->qbo_last_synced_at ? (string) $import->qbo_last_synced_at : null),
             'qboSyncError' => $import->qbo_sync_error,

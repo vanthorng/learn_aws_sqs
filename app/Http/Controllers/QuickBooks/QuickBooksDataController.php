@@ -4,8 +4,8 @@ namespace App\Http\Controllers\QuickBooks;
 
 use App\Enums\TeamPermission;
 use App\Http\Controllers\Controller;
-use App\Jobs\ExportQuickbooksInvoices;
 use App\Jobs\DeleteQuickbooksInvoices;
+use App\Jobs\ExportQuickbooksInvoices;
 use App\Jobs\VoidQuickbooksInvoices;
 use App\Models\QuickbooksOperation;
 use App\Models\QuickbooksOperationItem;
@@ -97,7 +97,10 @@ class QuickBooksDataController extends Controller
             $operation = QuickbooksOperation::create([
                 'team_id' => $current_team->id, 'requested_by' => $request->user()->id, 'type' => 'void', 'status' => 'queued', 'total_count' => count($invoiceIds),
             ]);
-            foreach ($invoiceIds as $invoiceId) QuickbooksOperationItem::create(['quickbooks_operation_id' => $operation->id, 'qbo_invoice_id' => $invoiceId]);
+            foreach ($invoiceIds as $invoiceId) {
+                QuickbooksOperationItem::create(['quickbooks_operation_id' => $operation->id, 'qbo_invoice_id' => $invoiceId]);
+            }
+
             return $operation;
         });
         VoidQuickbooksInvoices::dispatch($operation->id)->onConnection(config('imports.queue_connection'))->onQueue(config('imports.queue'));
@@ -119,7 +122,9 @@ class QuickBooksDataController extends Controller
             $operation = QuickbooksOperation::create([
                 'team_id' => $current_team->id, 'requested_by' => $request->user()->id, 'type' => 'delete', 'status' => 'queued', 'total_count' => count($invoiceIds),
             ]);
-            foreach ($invoiceIds as $invoiceId) QuickbooksOperationItem::create(['quickbooks_operation_id' => $operation->id, 'qbo_invoice_id' => $invoiceId]);
+            foreach ($invoiceIds as $invoiceId) {
+                QuickbooksOperationItem::create(['quickbooks_operation_id' => $operation->id, 'qbo_invoice_id' => $invoiceId]);
+            }
 
             return $operation;
         });

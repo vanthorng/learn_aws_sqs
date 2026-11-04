@@ -2,12 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InvoiceRecord extends Model
 {
     protected $guarded = [];
-    protected function casts(): array { return ['txn_date' => 'date', 'line_amount' => 'decimal:4', 'payload' => 'array', 'qbo_synced_at' => 'datetime', 'qbo_voided_at' => 'datetime', 'qbo_deleted_at' => 'datetime']; }
-    public function invoiceImport(): BelongsTo { return $this->belongsTo(InvoiceImport::class); }
+
+    protected function casts(): array
+    {
+        return ['txn_date' => 'date', 'line_amount' => 'decimal:4', 'payload' => 'array', 'qbo_synced_at' => 'datetime', 'qbo_voided_at' => 'datetime', 'qbo_deleted_at' => 'datetime'];
+    }
+
+    public function invoiceImport(): BelongsTo
+    {
+        return $this->belongsTo(InvoiceImport::class);
+    }
 }

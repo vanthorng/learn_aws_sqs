@@ -60,8 +60,8 @@ class QuickBooksAuthController extends Controller
         }
 
         try {
-            $redirectUri = $request->session()->pull('qbo_redirect_uri') 
-                ?: config('quickbooks.redirect_uri') 
+            $redirectUri = $request->session()->pull('qbo_redirect_uri')
+                ?: config('quickbooks.redirect_uri')
                 ?: route('quickbooks.callback', $current_team);
 
             $tokens = $client->exchangeCodeForTokens($code, $redirectUri);
@@ -95,7 +95,7 @@ class QuickBooksAuthController extends Controller
         } catch (Throwable $e) {
             return to_route('imports.index', $current_team)->with('toast', [
                 'type' => 'error',
-                'message' => 'Failed to connect to QuickBooks: ' . $e->getMessage(),
+                'message' => 'Failed to connect to QuickBooks: '.$e->getMessage(),
             ]);
         }
     }

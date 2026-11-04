@@ -3,7 +3,6 @@
 namespace App\Services\QuickBooks;
 
 use App\Models\QuickbooksConnection;
-use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -52,7 +51,7 @@ class QuickBooksClient
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            throw new RuntimeException('Failed to exchange authorization code for QuickBooks tokens: ' . ($response->json('error_description') ?? $response->body()));
+            throw new RuntimeException('Failed to exchange authorization code for QuickBooks tokens: '.($response->json('error_description') ?? $response->body()));
         }
 
         return $response->json();
@@ -78,7 +77,7 @@ class QuickBooksClient
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            throw new RuntimeException('Failed to refresh QuickBooks token: ' . ($response->json('error_description') ?? $response->body()));
+            throw new RuntimeException('Failed to refresh QuickBooks token: '.($response->json('error_description') ?? $response->body()));
         }
 
         $data = $response->json();
@@ -115,6 +114,7 @@ class QuickBooksClient
 
         if ($response->failed()) {
             Log::warning('Failed to fetch QuickBooks company info', ['body' => $response->body()]);
+
             return [];
         }
 
@@ -151,7 +151,7 @@ class QuickBooksClient
                     }
                 }
             } catch (\Throwable $e) {
-                Log::warning('QuickBooks preload customers failed: ' . $e->getMessage());
+                Log::warning('QuickBooks preload customers failed: '.$e->getMessage());
             }
         }
 
@@ -170,7 +170,7 @@ class QuickBooksClient
                     }
                 }
             } catch (\Throwable $e) {
-                Log::warning('QuickBooks preload items failed: ' . $e->getMessage());
+                Log::warning('QuickBooks preload items failed: '.$e->getMessage());
             }
         }
     }
@@ -199,9 +199,10 @@ class QuickBooksClient
             ]);
 
         $customers = $response->json('QueryResponse.Customer') ?? [];
-        if (!empty($customers)) {
+        if (! empty($customers)) {
             $id = (string) $customers[0]['Id'];
             $this->customerCache[$realmId][$displayName] = $id;
+
             return $id;
         }
 
@@ -210,7 +211,7 @@ class QuickBooksClient
             'DisplayName' => $displayName,
         ];
 
-        if (!empty($billingAddress)) {
+        if (! empty($billingAddress)) {
             $filteredAddr = array_filter([
                 'Line1' => $billingAddress['Line1'] ?? null,
                 'Line2' => $billingAddress['Line2'] ?? null,
@@ -220,7 +221,7 @@ class QuickBooksClient
                 'Country' => $billingAddress['Country'] ?? null,
             ]);
 
-            if (!empty($filteredAddr)) {
+            if (! empty($filteredAddr)) {
                 $payload['BillAddr'] = $filteredAddr;
             }
         }
@@ -231,11 +232,12 @@ class QuickBooksClient
             ->post("{$baseUrl}/v3/company/{$realmId}/customer", $payload);
 
         if ($createResponse->failed()) {
-            throw new RuntimeException("Failed to create customer '{$displayName}' in QuickBooks: " . $createResponse->body());
+            throw new RuntimeException("Failed to create customer '{$displayName}' in QuickBooks: ".$createResponse->body());
         }
 
         $id = (string) $createResponse->json('Customer.Id');
         $this->customerCache[$realmId][$displayName] = $id;
+
         return $id;
     }
 
@@ -262,9 +264,10 @@ class QuickBooksClient
             ]);
 
         $items = $response->json('QueryResponse.Item') ?? [];
-        if (!empty($items)) {
+        if (! empty($items)) {
             $id = (string) $items[0]['Id'];
             $this->itemCache[$realmId][$name] = $id;
+
             return $id;
         }
 
@@ -285,11 +288,12 @@ class QuickBooksClient
             ->post("{$baseUrl}/v3/company/{$realmId}/item", $payload);
 
         if ($createResponse->failed()) {
-            throw new RuntimeException("Failed to create item '{$name}' in QuickBooks: " . $createResponse->body());
+            throw new RuntimeException("Failed to create item '{$name}' in QuickBooks: ".$createResponse->body());
         }
 
         $id = (string) $createResponse->json('Item.Id');
         $this->itemCache[$realmId][$name] = $id;
+
         return $id;
     }
 
@@ -314,8 +318,8 @@ class QuickBooksClient
                 'body' => $response->body(),
             ]);
 
-            $errorMsg = $response->json('Fault.Error.0.Detail') 
-                ?? $response->json('Fault.Error.0.Message') 
+            $errorMsg = $response->json('Fault.Error.0.Detail')
+                ?? $response->json('Fault.Error.0.Message')
                 ?? $response->body();
 
             throw new RuntimeException("QuickBooks API Error: {$errorMsg}");
@@ -327,7 +331,7 @@ class QuickBooksClient
     /**
      * Batch create up to 30 invoices in a single HTTP request using QuickBooks Batch API.
      *
-     * @param array<int, array{bId: string, Invoice: array}> $batchItems
+     * @param  array<int, array{bId: string, Invoice: array}>  $batchItems
      * @return array<string, array{success: bool, invoiceId?: string, error?: string}>
      */
     public function batchCreateInvoices(QuickbooksConnection $connection, array $batchItems): array
@@ -363,8 +367,8 @@ class QuickBooksClient
                 'body' => $response->body(),
             ]);
 
-            $errorMsg = $response->json('Fault.Error.0.Detail') 
-                ?? $response->json('Fault.Error.0.Message') 
+            $errorMsg = $response->json('Fault.Error.0.Detail')
+                ?? $response->json('Fault.Error.0.Message')
                 ?? $response->body();
 
             throw new RuntimeException("QuickBooks Batch API Error: {$errorMsg}");
@@ -375,7 +379,9 @@ class QuickBooksClient
 
         foreach ($batchResponses as $itemResponse) {
             $bId = (string) ($itemResponse['bId'] ?? '');
-            if (!$bId) continue;
+            if (! $bId) {
+                continue;
+            }
 
             if (isset($itemResponse['Fault'])) {
                 $err = $itemResponse['Fault']['Error'][0]['Detail']
@@ -416,7 +422,7 @@ class QuickBooksClient
         // For any bId that didn't receive an explicit response
         foreach ($batchItems as $item) {
             $bId = (string) $item['bId'];
-            if (!isset($results[$bId])) {
+            if (! isset($results[$bId])) {
                 $results[$bId] = [
                     'success' => false,
                     'error' => 'Missing from QuickBooks batch response.',
@@ -449,7 +455,7 @@ class QuickBooksClient
                 return (string) $invoices[0]['Id'];
             }
         } catch (\Throwable $e) {
-            Log::warning("findInvoiceByDocNumber failed for {$docNumber}: " . $e->getMessage());
+            Log::warning("findInvoiceByDocNumber failed for {$docNumber}: ".$e->getMessage());
         }
 
         return null;
@@ -481,7 +487,7 @@ class QuickBooksClient
     }
 
     /**
-     * @param array{from_date: string, to_date: string, statuses?: list<string>, customer?: string|null, doc_number?: string|null, page?: int} $filters
+     * @param  array{from_date: string, to_date: string, statuses?: list<string>, customer?: string|null, doc_number?: string|null, page?: int}  $filters
      * @return array{data: list<array<string, mixed>>, meta: array{current_page: int, last_page: int, total: int, per_page: int}}
      */
     public function browseInvoices(QuickbooksConnection $connection, array $filters): array
@@ -507,8 +513,13 @@ class QuickBooksClient
         $docNumber = strtolower(trim((string) ($filters['doc_number'] ?? '')));
 
         return array_values(array_filter($invoices, function (array $invoice) use ($statuses, $customer, $docNumber): bool {
-            if (! in_array($this->invoiceStatus($invoice), $statuses, true)) return false;
-            if ($customer !== '' && ! str_contains(strtolower((string) ($invoice['CustomerRef']['name'] ?? '')), $customer)) return false;
+            if (! in_array($this->invoiceStatus($invoice), $statuses, true)) {
+                return false;
+            }
+            if ($customer !== '' && ! str_contains(strtolower((string) ($invoice['CustomerRef']['name'] ?? '')), $customer)) {
+                return false;
+            }
+
             return $docNumber === '' || str_contains(strtolower((string) ($invoice['DocNumber'] ?? '')), $docNumber);
         }));
     }
@@ -516,7 +527,10 @@ class QuickBooksClient
     /** @param array<string, mixed> $invoice */
     public function invoiceStatus(array $invoice): string
     {
-        if (strtolower((string) ($invoice['TxnStatus'] ?? '')) === 'voided') return 'voided';
+        if (strtolower((string) ($invoice['TxnStatus'] ?? '')) === 'voided') {
+            return 'voided';
+        }
+
         return (float) ($invoice['Balance'] ?? 0) <= 0 ? 'paid' : 'open';
     }
 
@@ -579,7 +593,6 @@ class QuickBooksClient
 
         return array_replace($currentInvoice, $response->json('Invoice') ?? []);
     }
-
 
     /** @var array<string, array<int, array{Id: string, Name: string}>> */
     private array $taxCodeCache = [];
@@ -660,7 +673,7 @@ class QuickBooksClient
             ->get("{$baseUrl}/v3/company/{$realmId}/query", ['query' => $query]);
 
         $accounts = $response->json('QueryResponse.Account') ?? [];
-        if (!empty($accounts)) {
+        if (! empty($accounts)) {
             return [
                 'value' => (string) $accounts[0]['Id'],
                 'name' => (string) $accounts[0]['Name'],

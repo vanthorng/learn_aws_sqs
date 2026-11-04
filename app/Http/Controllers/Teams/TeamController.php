@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Teams;
 
 use App\Actions\Teams\CreateTeam;
+use App\Enums\TeamPermission;
 use App\Enums\TeamRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teams\DeleteTeamRequest;
 use App\Http\Requests\Teams\SaveTeamRequest;
 use App\Models\Membership;
 use App\Models\Team;
+use App\Models\TeamApiToken;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -82,8 +84,8 @@ class TeamController extends Controller
                 ]),
             'permissions' => $user->toTeamPermissions($team),
             'availableRoles' => TeamRole::assignable(),
-            'apiTokens' => $user->hasTeamPermission($team, \App\Enums\TeamPermission::ImportInvoices)
-                ? $team->apiTokens()->latest()->get()->map(fn (\App\Models\TeamApiToken $token) => [
+            'apiTokens' => $user->hasTeamPermission($team, TeamPermission::ImportInvoices)
+                ? $team->apiTokens()->latest()->get()->map(fn (TeamApiToken $token) => [
                     'id' => $token->id,
                     'name' => $token->name,
                     'lastUsedAt' => $token->last_used_at?->toIso8601String(),

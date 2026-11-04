@@ -12,7 +12,9 @@ class QuickbooksExportWriter
     {
         $path = tempnam(sys_get_temp_dir(), 'qbo-export-');
         $zip = new ZipArchive;
-        if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create export workbook.');
+        if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('Unable to create export workbook.');
+        }
 
         $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
         $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
@@ -37,13 +39,19 @@ class QuickbooksExportWriter
             }
             $xml .= '</row>';
         }
+
         return $xml.'</sheetData></worksheet>';
     }
 
     private function columnName(int $column): string
     {
         $name = '';
-        while ($column > 0) { $column--; $name = chr(65 + ($column % 26)).$name; $column = intdiv($column, 26); }
+        while ($column > 0) {
+            $column--;
+            $name = chr(65 + ($column % 26)).$name;
+            $column = intdiv($column, 26);
+        }
+
         return $name;
     }
 }

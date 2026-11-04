@@ -9,5 +9,8 @@ class QuickbooksOperationItem extends Model
 {
     protected $guarded = [];
 
-    public function operation(): BelongsTo { return $this->belongsTo(QuickbooksOperation::class, 'quickbooks_operation_id'); }
+    public function operation(): BelongsTo
+    {
+        return $this->belongsTo(QuickbooksOperation::class, 'quickbooks_operation_id');
+    }
 }

@@ -2,9 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Actions\Imports\NotifyImportOutcome;
 use App\Enums\InvoiceImportStatus;
 use App\Events\InvoiceImportUpdated;
-use App\Actions\Imports\NotifyImportOutcome;
 use App\Models\InvoiceImport;
 use App\Models\InvoiceImportRow;
 use App\Models\InvoiceRecord;
@@ -25,6 +25,7 @@ class ProcessInvoiceImport implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public array $backoff = [30, 120, 300];
 
     public function __construct(public readonly string $importId) {}
@@ -82,7 +83,7 @@ class ProcessInvoiceImport implements ShouldQueue
         } catch (Throwable $exception) {
             $import->update([
                 'status' => InvoiceImportStatus::Pending->value,
-                'error_summary' => 'Import attempt error: ' . $exception->getMessage(),
+                'error_summary' => 'Import attempt error: '.$exception->getMessage(),
             ]);
             Log::warning('Invoice import attempt failed.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
             throw $exception;
@@ -103,7 +104,7 @@ class ProcessInvoiceImport implements ShouldQueue
         $import->update([
             'status' => InvoiceImportStatus::Failed,
             'completed_at' => now(),
-            'error_summary' => 'Import failed: ' . $exception->getMessage(),
+            'error_summary' => 'Import failed: '.$exception->getMessage(),
         ]);
         $import->refresh();
         Log::error('Invoice import failed permanently.', ['import_id' => $import->id, 'team_id' => $import->team_id, 'exception' => $exception]);
@@ -116,8 +117,8 @@ class ProcessInvoiceImport implements ShouldQueue
     {
         try {
             event(new InvoiceImportUpdated($import, $event));
-        } catch (\Throwable $e) {
-            Log::warning("Broadcasting {$event} failed: " . $e->getMessage());
+        } catch (Throwable $e) {
+            Log::warning("Broadcasting {$event} failed: ".$e->getMessage());
         }
     }
 

@@ -14,7 +14,10 @@ class QuickbooksOperationNotification extends Notification implements ShouldQueu
 
     public function __construct(private readonly QuickbooksOperation $operation) {}
 
-    public function via(object $notifiable): array { return ['database', 'mail']; }
+    public function via(object $notifiable): array
+    {
+        return ['database', 'mail'];
+    }
 
     public function toArray(object $notifiable): array
     {
@@ -28,7 +31,9 @@ class QuickbooksOperationNotification extends Notification implements ShouldQueu
 
     private function title(): string
     {
-        if ($this->operation->type === 'export') return $this->operation->status === 'completed' ? 'QuickBooks export ready' : 'QuickBooks export failed';
+        if ($this->operation->type === 'export') {
+            return $this->operation->status === 'completed' ? 'QuickBooks export ready' : 'QuickBooks export failed';
+        }
         if ($this->operation->type === 'delete') {
             return $this->operation->failed_count > 0 ? 'QuickBooks deletion needs attention' : 'QuickBooks invoices deleted';
         }
@@ -43,6 +48,7 @@ class QuickbooksOperationNotification extends Notification implements ShouldQueu
         }
 
         $action = $this->operation->type === 'delete' ? 'deleted' : 'voided';
+
         return "{$this->operation->success_count} invoices {$action}; {$this->operation->failed_count} need attention.";
     }
 }

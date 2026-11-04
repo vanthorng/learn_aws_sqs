@@ -42,7 +42,6 @@ class QuickBooksSyncController extends Controller
             ->onConnection(config('imports.queue_connection'))
             ->onQueue(config('imports.queue'));
 
-
         return back()->with('toast', [
             'type' => 'success',
             'message' => 'QuickBooks sync initiated. Invoices are being pushed in the background.',

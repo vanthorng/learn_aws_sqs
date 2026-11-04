@@ -23,12 +23,11 @@ Run `php artisan migrate --force` as a controlled, one-off deployment step after
 Pushing to `production` runs CI first. When it succeeds, `.github/workflows/deploy-production.yml` builds a production source bundle and deploys it to Elastic Beanstalk. Create a protected GitHub environment named `production`, then configure these environment variables:
 
 - `AWS_REGION`
-- `AWS_ROLE_TO_ASSUME` — the ARN of the GitHub OIDC deployment role
+- `AWS_ROLE_ARN` — the ARN of the GitHub OIDC deployment role
 - `EB_APPLICATION_NAME`
 - `EB_ENVIRONMENT_NAME`
-- `EB_ARTIFACT_BUCKET` — an S3 bucket in the same region for deployment bundles
 
-Set `VITE_PUSHER_APP_KEY` and `VITE_PUSHER_APP_CLUSTER` as `production` environment secrets so they are available while Vite builds the browser bundle. Configure GitHub OIDC to allow this repository's `production` environment to assume the deployment role. The role needs permission to upload the bundle to the artifact bucket and to create, describe, and update Elastic Beanstalk application versions/environments. The Elastic Beanstalk instance profile also needs `s3:GetObject` access to the uploaded bundle.
+The workflow resolves Elastic Beanstalk's managed S3 bucket automatically, so no artifact-bucket variable is needed. Set `VITE_PUSHER_APP_KEY` and `VITE_PUSHER_APP_CLUSTER` as `production` environment secrets so they are available while Vite builds the browser bundle. Configure GitHub OIDC to allow this repository's `production` environment to assume the deployment role. The role needs permission to upload the bundle to the artifact bucket and to create, describe, and update Elastic Beanstalk application versions/environments. The Elastic Beanstalk instance profile also needs `s3:GetObject` access to the uploaded bundle.
 
 The web environment does not run workers or the scheduler. Run a separate worker environment/process with the same application settings (see the queue command below).
 

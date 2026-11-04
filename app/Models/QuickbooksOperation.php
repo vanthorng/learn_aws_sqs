@@ -12,7 +12,9 @@ class QuickbooksOperation extends Model
     use HasUlids;
 
     protected $keyType = 'string';
+
     public $incrementing = false;
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -25,7 +27,18 @@ class QuickbooksOperation extends Model
         ];
     }
 
-    public function team(): BelongsTo { return $this->belongsTo(Team::class); }
-    public function requester(): BelongsTo { return $this->belongsTo(User::class, 'requested_by'); }
-    public function items(): HasMany { return $this->hasMany(QuickbooksOperationItem::class); }
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(QuickbooksOperationItem::class);
+    }
 }

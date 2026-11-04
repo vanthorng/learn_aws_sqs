@@ -26,10 +26,9 @@ jobs:
     environment: production
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
-      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
       EB_APPLICATION_NAME: ${{ vars.EB_APPLICATION_NAME }}
       EB_ENVIRONMENT_NAME: ${{ vars.EB_ENVIRONMENT_NAME }}
-      EB_ARTIFACT_BUCKET: ${{ vars.EB_ARTIFACT_BUCKET }}
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
       VITE_PUSHER_APP_KEY: ${{ secrets.VITE_PUSHER_APP_KEY }}
       VITE_PUSHER_APP_CLUSTER: ${{ secrets.VITE_PUSHER_APP_CLUSTER }}
@@ -43,7 +42,7 @@ jobs:
 
       - name: Validate deployment configuration
         run: |
-          required=(AWS_REGION AWS_ROLE_TO_ASSUME EB_APPLICATION_NAME EB_ENVIRONMENT_NAME EB_ARTIFACT_BUCKET)
+          required=(AWS_REGION AWS_ROLE_ARN EB_APPLICATION_NAME EB_ENVIRONMENT_NAME)
 
           for name in "${required[@]}"; do
             if [[ -z "${!name}" ]]; then
@@ -98,9 +97,15 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-eb-deploy
+
+      - name: Resolve Elastic Beanstalk storage location
+        run: |
+          artifact_bucket="$(aws elasticbeanstalk create-storage-location --query S3Bucket --output text)"
+          test -n "$artifact_bucket" && test "$artifact_bucket" != "None"
+          printf 'EB_ARTIFACT_BUCKET=%s\n' "$artifact_bucket" >> "$GITHUB_ENV"
 
       - name: Upload and deploy application version
         env:

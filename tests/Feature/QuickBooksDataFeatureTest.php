@@ -2,16 +2,16 @@
 
 use App\Enums\InvoiceImportStatus;
 use App\Enums\TeamRole;
-use App\Jobs\ExportQuickbooksInvoices;
 use App\Jobs\DeleteQuickbooksInvoices;
+use App\Jobs\ExportQuickbooksInvoices;
 use App\Jobs\VoidQuickbooksInvoices;
 use App\Models\InvoiceImport;
 use App\Models\InvoiceRecord;
 use App\Models\QuickbooksConnection;
 use App\Models\QuickbooksOperation;
+use App\Models\QuickbooksOperationItem;
 use App\Models\Team;
 use App\Models\User;
-use App\Models\QuickbooksOperationItem;
 use App\Services\QuickBooks\QuickBooksClient;
 use App\Services\QuickBooks\QuickbooksExportWriter;
 use Illuminate\Support\Facades\Http;
@@ -156,7 +156,7 @@ test('export job writes a private two-sheet XLSX workbook', function () {
     $operation->refresh();
     expect($operation->status)->toBe('completed')->and($operation->storage_path)->not->toBeNull();
     Storage::disk('local')->assertExists($operation->storage_path);
-    $workbook = new \ZipArchive;
+    $workbook = new ZipArchive;
     $workbook->open(Storage::disk('local')->path($operation->storage_path));
     expect($workbook->getFromName('xl/worksheets/sheet1.xml'))->toContain('EXP-1')
         ->and($workbook->getFromName('xl/worksheets/sheet2.xml'))->toContain('Service');

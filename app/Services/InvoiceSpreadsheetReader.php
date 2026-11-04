@@ -47,6 +47,7 @@ class InvoiceSpreadsheetReader
         foreach ($rows as $row) {
             if ($headers === null) {
                 $headers = array_values($row['values']);
+
                 continue;
             }
 

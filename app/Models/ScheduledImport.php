@@ -11,6 +11,7 @@ class ScheduledImport extends Model
     use HasUlids;
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $guarded = [];

@@ -14,8 +14,16 @@ class InvoiceImportUpdated implements ShouldBroadcastNow
 
     public function __construct(public InvoiceImport $invoiceImport, private readonly string $event) {}
 
-    public function broadcastOn(): array { return [new PrivateChannel('import.'.$this->invoiceImport->id)]; }
-    public function broadcastAs(): string { return 'import.'.$this->event; }
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel('import.'.$this->invoiceImport->id)];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'import.'.$this->event;
+    }
+
     public function broadcastWith(): array
     {
         $parseDuration = null;
