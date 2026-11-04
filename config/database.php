@@ -17,7 +17,7 @@ return [
     |
     */
 
-    // Vercel's Supabase integration provides POSTGRES_URL but does not set
+    // Some managed PostgreSQL integrations provide POSTGRES_URL but do not set
     // Laravel's DB_CONNECTION. Prefer its PostgreSQL connection whenever it
     // is present so an old/project-level DB_CONNECTION cannot select SQLite
     // or MySQL in a serverless deployment.
@@ -90,7 +90,7 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            // Supabase's Vercel integration exposes POSTGRES_URL. Prefer an
+            // Managed PostgreSQL integrations can expose POSTGRES_URL. Prefer an
             // explicitly configured Laravel DB_URL, but accept that managed
             // connection string so serverless deployments do not fall back to
             // localhost/default credentials.

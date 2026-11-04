@@ -1,27 +1,35 @@
 # Invoice imports
 
-## CI/CD
+## AWS Elastic Beanstalk deployment
 
-Every pull request targeting `main` or `production`, and every push to either branch, runs independent PHP quality, Laravel test, frontend quality/build, dependency-review, and production-dependency-audit jobs. A green CI run on `main` deploys a Vercel preview through `deploy-main.yml`. A green CI run on `production` triggers `deploy-production.yml`, which deploys that exact verified commit through the protected production environment.
+This repository is prepared for the Elastic Beanstalk PHP platform. The `.platform` directory makes Nginx serve Laravel from `public/` and warms framework caches after deployment.
 
-Create GitHub environments named `main` and `production`. Require the appropriate reviewer(s) for `production`. Add the following secrets to both environments:
+Before creating an environment, build the production assets in the deployment artifact:
 
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
-- `VERCEL_TOKEN` (a Vercel token with access only to this project)
+```bash
+npm ci
+npm run build
+composer install --no-dev --optimize-autoloader --no-interaction
+```
 
-Protect `main` in GitHub and require the `PHP quality`, `Backend tests`, `Frontend quality and build`, and `Production dependency audit` checks before merge. Keep the Vercel credentials scoped to the `production` environment; pull-request workflows never receive them. If this repository is also connected to Vercel's Git integration, disable its automatic production deployment to avoid deploying each `main` commit twice.
+Choose an Elastic Beanstalk PHP platform compatible with the PHP version in `composer.json`. Configure these environment properties in Elastic Beanstalk (or reference them from AWS Secrets Manager): `APP_KEY`, `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL`, database credentials, `CACHE_STORE`, `SESSION_DRIVER`, mail credentials, Pusher credentials, and the required AWS/S3/SQS values listed below. Do not commit a production `.env` file.
+
+Use an RDS database and persistent services for production: `IMPORTS_DISK=s3`, `IMPORT_QUEUE_CONNECTION=sqs`, `IMPORT_QUEUE`, `SQS_QUEUE`, `SQS_DLQ`, `AWS_DEFAULT_REGION`, and `AWS_BUCKET`. Attach an instance profile that grants only the S3 and SQS permissions this application requires; prefer the instance role over long-lived AWS access keys.
+
+Run `php artisan migrate --force` as a controlled, one-off deployment step after validating database connectivity. It is intentionally not run automatically by the web instances.
+
+The web environment does not run workers or the scheduler. Run a separate worker environment/process with the same application settings (see the queue command below).
 
 Invoice workbooks are uploaded to private storage and processed asynchronously through the configured Laravel queue. In production configure `IMPORTS_DISK=s3`, `IMPORT_QUEUE_CONNECTION=sqs`, the AWS credentials/bucket, and Pusher credentials.
 
-## Vercel and Pusher
+## Pusher
 
-Set these Vercel environment variables to their **actual Pusher dashboard values** for the Production environment, then redeploy:
+Set these environment variables to their **actual Pusher dashboard values** in Elastic Beanstalk, then deploy:
 
 - `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, and `PUSHER_APP_CLUSTER` for Laravel server-side broadcasting.
 - `VITE_PUSHER_APP_KEY` and `VITE_PUSHER_APP_CLUSTER` for the browser bundle.
 
-Do not set a Vercel variable to `${PUSHER_APP_KEY}` or `${PUSHER_APP_CLUSTER}`. Vite embeds `VITE_*` values at build time, and unresolved placeholders produce invalid hosts such as `sockjs-${pusher app cluster}.pusher.com`. The Vercel build now runs `npm run build`, so each deployment compiles the browser bundle with the Vercel `VITE_*` values.
+Do not set a value to `${PUSHER_APP_KEY}` or `${PUSHER_APP_CLUSTER}`. Vite embeds `VITE_*` values at build time, so provide their actual values while building the production asset bundle. Unresolved placeholders produce invalid hosts such as `sockjs-${pusher app cluster}.pusher.com`.
 
 Create an SQS primary queue named by `IMPORT_QUEUE` and a dead-letter queue named by `SQS_DLQ` (or supply its full URL). Set the primary queue's AWS redrive policy to the DLQ with `maxReceiveCount` matching `SQS_MAX_RECEIVE_COUNT` (3 by default). Terminal Laravel job failures also publish sanitized import metadata to that DLQ. Run a dedicated worker:
 

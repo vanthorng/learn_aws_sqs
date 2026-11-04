@@ -43,15 +43,9 @@ export default defineConfig({
                 },
             },
         }),
-        // Vercel runs `composer run vercel`, which generates Wayfinder routes
-        // before Vite starts. Locally this plugin keeps those files current.
-        ...(process.env.VERCEL
-            ? []
-            : [
-                  wayfinder({
-                      formVariants: true,
-                  }),
-              ]),
+        wayfinder({
+            formVariants: true,
+        }),
     ]),
     server: {
         watch: {
