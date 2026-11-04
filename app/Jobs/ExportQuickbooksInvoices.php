@@ -66,7 +66,12 @@ class ExportQuickbooksInvoices implements ShouldQueue
             $disk = config('imports.disk');
             $filename = 'quickbooks-invoices-'.now()->format('Y-m-d-His').'.xlsx';
             $storagePath = 'quickbooks-exports/'.$operation->team_id.'/'.$operation->id.'/'.$filename;
-            Storage::disk($disk)->put($storagePath, fopen($temporaryPath, 'rb'));
+            $stream = fopen($temporaryPath, 'rb');
+            if ($stream === false) {
+                throw new \RuntimeException("Unable to read export file: {$temporaryPath}");
+            }
+            Storage::disk($disk)->put($storagePath, $stream);
+            fclose($stream);
             @unlink($temporaryPath);
             $operation->update([
                 'status' => 'completed', 'processed_count' => count($invoices), 'success_count' => count($invoices), 'percentage' => 100,

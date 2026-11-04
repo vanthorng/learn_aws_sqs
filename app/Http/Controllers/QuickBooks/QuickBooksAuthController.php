@@ -39,12 +39,12 @@ class QuickBooksAuthController extends Controller
 
     public function callback(Request $request, QuickBooksClient $client, ?Team $current_team = null): RedirectResponse
     {
-        if (! $current_team) {
+        if ($current_team === null) {
             $teamId = $request->session()->get('qbo_team_id');
-            $current_team = $teamId ? Team::find($teamId) : ($request->user()?->currentTeam ?? $request->user()?->teams()->first());
+            $current_team = is_numeric($teamId) ? Team::find((int) $teamId) : null;
         }
 
-        abort_unless($current_team, 404, 'Team not found.');
+        abort_unless($current_team instanceof Team, 404, 'Team not found.');
         $this->ensureCanManage($request, $current_team);
 
         $savedState = $request->session()->pull('qbo_oauth_state');
@@ -72,8 +72,8 @@ class QuickBooksAuthController extends Controller
                     'realm_id' => $realmId,
                     'access_token' => $tokens['access_token'],
                     'refresh_token' => $tokens['refresh_token'],
-                    'access_token_expires_at' => now()->addSeconds($tokens['expires_in'] ?? 3600),
-                    'refresh_token_expires_at' => now()->addSeconds($tokens['x_refresh_token_expires_in'] ?? 8726400),
+                    'access_token_expires_at' => now()->addSeconds($tokens['expires_in']),
+                    'refresh_token_expires_at' => now()->addSeconds($tokens['x_refresh_token_expires_in']),
                     'environment' => config('quickbooks.environment', 'sandbox'),
                 ]
             );

@@ -16,6 +16,8 @@ class StoreScheduledImportRequest extends FormRequest
             && $this->user()?->hasTeamPermission($team, TeamPermission::ImportInvoices);
     }
 
+    /** @return array<string, list<string>> */
+    /** @return array<string, list<string>> */
     public function rules(): array
     {
         return [

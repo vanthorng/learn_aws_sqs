@@ -14,11 +14,17 @@ class QuickbooksOperationNotification extends Notification implements ShouldQueu
 
     public function __construct(private readonly QuickbooksOperation $operation) {}
 
+    /** @return list<string> */
+    /** @return list<string> */
+    /** @return list<string> */
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
     }
 
+    /** @return array<string, string> */
+    /** @return array<string, string> */
+    /** @return array<string, string> */
     public function toArray(object $notifiable): array
     {
         return ['title' => $this->title(), 'message' => $this->message(), 'url' => route('quickbooks.data.index', $this->operation->team)];

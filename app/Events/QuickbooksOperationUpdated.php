@@ -14,6 +14,7 @@ class QuickbooksOperationUpdated implements ShouldBroadcastNow
 
     public function __construct(public QuickbooksOperation $operation) {}
 
+    /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
     {
         return [new PrivateChannel('qbo-operation.'.$this->operation->id)];
@@ -24,6 +25,7 @@ class QuickbooksOperationUpdated implements ShouldBroadcastNow
         return 'quickbooks.operation.updated';
     }
 
+    /** @return array<string, int|string|null> */
     public function broadcastWith(): array
     {
         return [

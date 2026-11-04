@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class QuickBooksDataController extends Controller
 {
@@ -141,7 +142,7 @@ class QuickBooksDataController extends Controller
         return response()->json(['operation' => $this->operation($operation)]);
     }
 
-    public function download(Request $request, Team $current_team, QuickbooksOperation $operation)
+    public function download(Request $request, Team $current_team, QuickbooksOperation $operation): StreamedResponse
     {
         $this->ensureCanManage($request, $current_team);
         abort_unless($operation->team_id === $current_team->id && $operation->type === 'export' && $operation->status === 'completed', 404);
@@ -153,7 +154,9 @@ class QuickBooksDataController extends Controller
     private function ensureConnected(Request $request, Team $team): void
     {
         $this->ensureCanManage($request, $team);
-        abort_unless($team->quickbooksConnection, 422, 'Connect QuickBooks before using this feature.');
+        if ($team->quickbooksConnection === null) {
+            abort(422, 'Connect QuickBooks before using this feature.');
+        }
     }
 
     private function ensureCanManage(Request $request, Team $team): void
@@ -161,6 +164,7 @@ class QuickBooksDataController extends Controller
         abort_unless($request->user()->hasTeamPermission($team, TeamPermission::ImportInvoices), 403);
     }
 
+    /** @return array<string, array<string, mixed>|bool|int|string|null> */
     private function operation(QuickbooksOperation $operation): array
     {
         return [

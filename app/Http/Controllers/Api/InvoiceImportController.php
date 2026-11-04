@@ -35,6 +35,7 @@ class InvoiceImportController extends Controller
         return response()->json(['data' => $this->summary($invoiceImport)]);
     }
 
+    /** @return array<string, bool|int|string|null> */
     private function summary(InvoiceImport $import): array
     {
         return [

@@ -18,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Throwable;
 
 class ProcessInvoiceImport implements ShouldQueue
@@ -26,6 +27,7 @@ class ProcessInvoiceImport implements ShouldQueue
 
     public int $tries = 3;
 
+    /** @var list<int> */
     public array $backoff = [30, 120, 300];
 
     public function __construct(public readonly string $importId) {}
@@ -75,7 +77,7 @@ class ProcessInvoiceImport implements ShouldQueue
             $this->safeBroadcast($import, 'completed');
             $notifyImportOutcome->handle($import, 'import_completed');
 
-            if ($import->auto_sync_qbo && $import->team?->quickbooksConnection) {
+            if ($import->auto_sync_qbo && $import->team->quickbooksConnection) {
                 SyncImportToQuickBooks::dispatch($import->id)
                     ->onConnection(config('imports.queue_connection'))
                     ->onQueue(config('imports.queue'));
@@ -208,6 +210,11 @@ class ProcessInvoiceImport implements ShouldQueue
             throw new RuntimeException("Unable to read import file from S3: {$import->storage_path}");
         }
         $destination = fopen($temporaryPath, 'wb');
+        if ($destination === false) {
+            fclose($source);
+
+            throw new RuntimeException("Unable to create temporary import file: {$temporaryPath}");
+        }
         stream_copy_to_stream($source, $destination);
         fclose($destination);
         fclose($source);
@@ -228,10 +235,12 @@ class ProcessInvoiceImport implements ShouldQueue
                 : rtrim((string) config('queue.connections.sqs.prefix'), '/').'/'.$queue.config('queue.connections.sqs.suffix');
             $clientConfig = [
                 'version' => 'latest',
-                'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+                'region' => config('queue.connections.sqs.region', 'us-east-1'),
             ];
-            if (filled(env('AWS_ACCESS_KEY_ID'))) {
-                $clientConfig['credentials'] = ['key' => env('AWS_ACCESS_KEY_ID'), 'secret' => env('AWS_SECRET_ACCESS_KEY')];
+            $key = config('queue.connections.sqs.key');
+            $secret = config('queue.connections.sqs.secret');
+            if (filled($key) && filled($secret)) {
+                $clientConfig['credentials'] = ['key' => $key, 'secret' => $secret];
             }
             (new SqsClient($clientConfig))->sendMessage([
                 'QueueUrl' => $queueUrl,

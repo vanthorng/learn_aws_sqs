@@ -7,7 +7,7 @@ use App\Jobs\SyncImportToQuickBooks;
 use App\Models\InvoiceImport;
 use App\Models\QuickbooksOperation;
 use App\Models\TeamInvitation;
-use App\Services\QuickBooksClient;
+use App\Services\QuickBooks\QuickBooksClient;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 
@@ -43,10 +43,10 @@ Artisan::command('imports:dispatch-scheduled', function (DispatchScheduledImport
 
 Artisan::command('import:run {id? : The ID of the import to run} {--queue : Dispatch to queue instead of running synchronously}', function ($id = null) {
     $import = $id
-        ? InvoiceImport::find($id)
-        : InvoiceImport::where('status', InvoiceImportStatus::Pending)->latest()->first();
+        ? InvoiceImport::query()->find($id)
+        : InvoiceImport::query()->where('status', InvoiceImportStatus::Pending)->latest()->first();
 
-    if (! $import) {
+    if (! $import instanceof InvoiceImport) {
         $this->error('No pending import found.');
 
         return 1;

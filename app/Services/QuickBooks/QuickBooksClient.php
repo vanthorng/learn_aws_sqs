@@ -102,6 +102,7 @@ class QuickBooksClient
         return $connection;
     }
 
+    /** @return array<string, mixed> */
     public function getCompanyInfo(QuickbooksConnection $connection): array
     {
         $connection = $this->ensureFreshTokens($connection);
@@ -178,6 +179,7 @@ class QuickBooksClient
     /**
      * Search for existing customer by display name, or create one (cached in-memory).
      */
+    /** @param array<string, mixed> $billingAddress */
     public function findOrCreateCustomer(QuickbooksConnection $connection, string $displayName, array $billingAddress = []): string
     {
         $realmId = $connection->realm_id;
@@ -300,6 +302,10 @@ class QuickBooksClient
     /**
      * Create an invoice in QuickBooks Online.
      */
+    /**
+     * @param  array<string, mixed>  $invoicePayload
+     * @return array<string, mixed>
+     */
     public function createInvoice(QuickbooksConnection $connection, array $invoicePayload): array
     {
         $connection = $this->ensureFreshTokens($connection);
@@ -331,7 +337,7 @@ class QuickBooksClient
     /**
      * Batch create up to 30 invoices in a single HTTP request using QuickBooks Batch API.
      *
-     * @param  array<int, array{bId: string, Invoice: array}>  $batchItems
+     * @param  array<int, array{bId: string, Invoice: array<string, mixed>}>  $batchItems
      * @return array<string, array{success: bool, invoiceId?: string, error?: string}>
      */
     public function batchCreateInvoices(QuickbooksConnection $connection, array $batchItems): array
@@ -479,6 +485,10 @@ class QuickBooksClient
             }
 
             $page = $response->json('QueryResponse.Invoice') ?? [];
+            if (! is_array($page)) {
+                $page = [];
+            }
+            $page = array_values(array_filter($page, 'is_array'));
             $invoices = [...$invoices, ...$page];
             $startPosition += count($page);
         } while (count($page) === 100);
@@ -499,13 +509,16 @@ class QuickBooksClient
         $page = min(max(1, (int) ($filters['page'] ?? 1)), $lastPage);
 
         return [
-            'data' => array_values(array_slice($invoices, ($page - 1) * $perPage, $perPage)),
+            'data' => array_slice($invoices, ($page - 1) * $perPage, $perPage),
             'meta' => ['current_page' => $page, 'last_page' => $lastPage, 'total' => $total, 'per_page' => $perPage],
         ];
     }
 
-    /** @param list<array<string, mixed>> $invoices @param array{statuses?: list<string>, customer?: string|null, doc_number?: string|null} $filters
-     *  @return list<array<string, mixed>> */
+    /**
+     * @param  list<array<string, mixed>>  $invoices
+     * @param  array{statuses?: list<string>, customer?: string|null, doc_number?: string|null}  $filters
+     * @return list<array<string, mixed>>
+     */
     public function filterInvoices(array $invoices, array $filters): array
     {
         $statuses = $filters['statuses'] ?? ['open', 'paid', 'voided'];
@@ -600,6 +613,7 @@ class QuickBooksClient
     /**
      * Resolve tax code reference for QuickBooks Online non-US companies (GST, VAT, etc.).
      */
+    /** @return array{value: string, name: string}|null */
     public function resolveTaxCodeRef(QuickbooksConnection $connection, ?string $rawCode): ?array
     {
         $realmId = $connection->realm_id;
@@ -662,6 +676,7 @@ class QuickBooksClient
     /**
      * Query default income account for item creation.
      */
+    /** @return array{value: string, name: string} */
     private function getIncomeAccountRef(QuickbooksConnection $connection): array
     {
         $baseUrl = $this->getBaseUrl($connection);
@@ -681,7 +696,7 @@ class QuickBooksClient
         }
 
         // Fallback default
-        return ['value' => '1'];
+        return ['value' => '1', 'name' => 'Sales'];
     }
 
     private function getBaseUrl(QuickbooksConnection $connection): string

@@ -17,11 +17,17 @@ class InvoiceImportNotification extends Notification implements ShouldQueue
         private readonly string $outcome,
     ) {}
 
+    /** @return list<string> */
+    /** @return list<string> */
+    /** @return list<string> */
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
     }
 
+    /** @return array<string, string> */
+    /** @return array<string, string> */
+    /** @return array<string, string> */
     public function toArray(object $notifiable): array
     {
         return [

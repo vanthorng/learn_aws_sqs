@@ -91,6 +91,8 @@ class ScheduledImportController extends Controller
         abort_unless($request->user()->hasTeamPermission($team, TeamPermission::ImportInvoices), 403);
     }
 
+    /** @return array<string, bool|string|null> */
+    /** @return array<string, bool|string|null> */
     private function summary(ScheduledImport $schedule): array
     {
         return [

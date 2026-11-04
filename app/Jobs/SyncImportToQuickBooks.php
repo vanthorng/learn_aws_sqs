@@ -149,7 +149,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                     }
 
                     // 3. Assemble Invoice Payload
-                    $txnDate = $firstLine->txn_date?->toDateString()
+                    $txnDate = $firstLine->txn_date->toDateString()
                         ?: InvoiceSpreadsheetReader::spreadsheetDate($payload['Txn Date'] ?? null)
                         ?: now()->toDateString();
                     $dueDate = InvoiceSpreadsheetReader::spreadsheetDate($payload['Due Date'] ?? null);
@@ -218,7 +218,7 @@ class SyncImportToQuickBooks implements ShouldQueue
                         $lines = $batchDocs[$docNumber];
                         $res = $results[$docNumber] ?? null;
 
-                        if ($res && ! empty($res['success'])) {
+                        if ($res !== null && $res['success'] && isset($res['invoiceId'])) {
                             $syncedCount++;
                             InvoiceRecord::whereIn('id', $lines->pluck('id'))->update([
                                 'qbo_invoice_id' => $res['invoiceId'],
