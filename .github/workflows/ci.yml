@@ -102,12 +102,28 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: package-lock.json
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Generate Wayfinder route definitions
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan wayfinder:generate --with-form --no-interaction
 
       - name: Install JavaScript dependencies
         run: npm ci
