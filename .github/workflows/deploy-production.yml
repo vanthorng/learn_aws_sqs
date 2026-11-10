@@ -141,7 +141,7 @@ jobs:
           echo "Deployment package created"
 
 
-      - name: Check GitHub OIDC subject
+      - name: Check GitHub OIDC subject 
         uses: actions/github-script@v7
         with:
           script: |
