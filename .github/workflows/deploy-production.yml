@@ -286,7 +286,7 @@ jobs:
           echo "Deployment completed successfully"
 
       # ========================================
-      # 17. Show logs on deployment failure
+      # 17. Show logs on deployment failure 
       # ========================================
       - name: Show Elastic Beanstalk events on failure
         if: failure() && steps.aws_auth.outcome == 'success'
