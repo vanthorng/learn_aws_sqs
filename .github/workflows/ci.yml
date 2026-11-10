@@ -176,4 +176,4 @@ jobs:
         run: composer audit --locked --no-interaction
 
       - name: Audit production JavaScript dependencies
-        run: npm audit --omit=dev --audit-level=high 
+        run: npm audit --omit=dev --audit-level=high
