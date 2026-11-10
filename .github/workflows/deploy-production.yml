@@ -42,14 +42,19 @@ jobs:
       VITE_PUSHER_APP_CLUSTER: ${{ secrets.VITE_PUSHER_APP_CLUSTER }}
 
     steps:
-      # 1. Checkout verified source code
-      - name: Check out the verified production commit
+
+      # ========================================
+      # 1. Checkout verified production commit
+      # ========================================
+      - name: Checkout production code
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      # 2. Validate environment variables
+      # ========================================
+      # 2. Validate configuration
+      # ========================================
       - name: Validate deployment configuration
         run: |
           required=(
@@ -61,12 +66,16 @@ jobs:
 
           for name in "${required[@]}"; do
             if [[ -z "${!name}" ]]; then
-              echo "Missing production environment variable: ${name}"
+              echo "Missing variable: ${name}"
               exit 1
             fi
           done
 
+          echo "Deployment configuration validated"
+
+      # ========================================
       # 3. Setup PHP
+      # ========================================
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -74,7 +83,9 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      # ========================================
       # 4. Setup Node.js
+      # ========================================
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -82,8 +93,10 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      # 5. Install Laravel dependencies and build
-      - name: Install production dependencies and build assets
+      # ========================================
+      # 5. Install production dependencies
+      # ========================================
+      - name: Install Composer dependencies
         run: |
           composer install \
             --no-dev \
@@ -91,14 +104,21 @@ jobs:
             --no-interaction \
             --no-progress
 
+      # ========================================
+      # 6. Build frontend assets
+      # ========================================
+      - name: Build Vite assets
+        run: |
           npm ci
           npm run build
 
-      # 6. Create deployment ZIP
-      - name: Create Elastic Beanstalk source bundle
+      # ========================================
+      # 7. Create deployment ZIP
+      # ========================================
+      - name: Create Elastic Beanstalk bundle
         id: bundle
         run: |
-          version_label="github-${GITHUB_RUN_ID}-${DEPLOY_SHA::7}"
+          version_label="github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${DEPLOY_SHA::7}"
           bundle_key="${EB_APPLICATION_NAME}/${version_label}.zip"
 
           zip -qr deployment.zip . \
@@ -118,7 +138,11 @@ jobs:
           echo "version_label=${version_label}" >> "$GITHUB_OUTPUT"
           echo "bundle_key=${bundle_key}" >> "$GITHUB_OUTPUT"
 
-      # 7. Inspect GitHub OIDC subject
+          echo "Deployment package created"
+
+      # ========================================
+      # 8. Diagnose GitHub OIDC subject
+      # ========================================
       - name: Check GitHub OIDC subject
         uses: actions/github-script@v7
         with:
@@ -134,22 +158,33 @@ jobs:
 
             core.info(`OIDC Subject: ${payload.sub}`);
             core.info(`OIDC Audience: ${payload.aud}`);
+            core.info(`Repository: ${payload.repository}`);
 
-      # 8. Authenticate to AWS using OIDC
+      # ========================================
+      # 9. Configure AWS credentials
+      # ========================================
       - name: Configure AWS credentials
+        id: aws_auth
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-eb-deploy
+          audience: sts.amazonaws.com
+          retry-max-attempts: 1
 
-      # 9. Verify AWS authentication
+      # ========================================
+      # 10. Verify AWS identity
+      # ========================================
       - name: Verify AWS credentials
         run: |
+          echo "Checking AWS identity..."
           aws sts get-caller-identity
 
-      # 10. Resolve Elastic Beanstalk S3 bucket
-      - name: Resolve Elastic Beanstalk storage location
+      # ========================================
+      # 11. Resolve Elastic Beanstalk S3 bucket
+      # ========================================
+      - name: Resolve Elastic Beanstalk storage
         id: storage
         run: |
           bucket=$(aws elasticbeanstalk create-storage-location \
@@ -157,14 +192,16 @@ jobs:
             --output text)
 
           if [[ -z "$bucket" || "$bucket" == "None" ]]; then
-            echo "Failed to resolve Elastic Beanstalk S3 bucket"
+            echo "Failed to resolve EB S3 bucket"
             exit 1
           fi
 
           echo "bucket=${bucket}" >> "$GITHUB_OUTPUT"
 
-      # 11. Upload deployment package to S3
-      - name: Upload deployment bundle to S3
+      # ========================================
+      # 12. Upload deployment bundle to S3
+      # ========================================
+      - name: Upload deployment bundle
         env:
           S3_BUCKET: ${{ steps.storage.outputs.bucket }}
           BUNDLE_KEY: ${{ steps.bundle.outputs.bundle_key }}
@@ -172,7 +209,11 @@ jobs:
           aws s3 cp deployment.zip \
             "s3://${S3_BUCKET}/${BUNDLE_KEY}"
 
-      # 12. Create Elastic Beanstalk application version
+          echo "Bundle uploaded successfully"
+
+      # ========================================
+      # 13. Create application version
+      # ========================================
       - name: Create Elastic Beanstalk application version
         env:
           S3_BUCKET: ${{ steps.storage.outputs.bucket }}
@@ -186,7 +227,9 @@ jobs:
             --source-bundle \
               "S3Bucket=${S3_BUCKET},S3Key=${BUNDLE_KEY}"
 
-      # 13. Deploy application version
+      # ========================================
+      # 14. Deploy application
+      # ========================================
       - name: Deploy to Elastic Beanstalk
         env:
           VERSION_LABEL: ${{ steps.bundle.outputs.version_label }}
@@ -196,14 +239,18 @@ jobs:
             --environment-name "$EB_ENVIRONMENT_NAME" \
             --version-label "$VERSION_LABEL"
 
-      # 14. Wait for deployment completion
+      # ========================================
+      # 15. Wait for deployment
+      # ========================================
       - name: Wait for Elastic Beanstalk deployment
         run: |
           aws elasticbeanstalk wait environment-updated \
             --application-name "$EB_APPLICATION_NAME" \
             --environment-names "$EB_ENVIRONMENT_NAME"
 
-      # 15. Verify deployed version and environment health
+      # ========================================
+      # 16. Verify deployed application
+      # ========================================
       - name: Verify deployment
         env:
           VERSION_LABEL: ${{ steps.bundle.outputs.version_label }}
@@ -216,37 +263,34 @@ jobs:
               --output text
           )"
 
-          echo "Environment Status: $status"
-          echo "Environment Health: $health"
+          echo "Status: $status"
+          echo "Health: $health"
           echo "Deployed Version: $deployed_version"
           echo "Expected Version: $VERSION_LABEL"
 
           if [[ "$status" != "Ready" ]]; then
-            echo "Elastic Beanstalk environment is not ready"
+            echo "Environment is not ready"
             exit 1
           fi
 
           if [[ "$deployed_version" != "$VERSION_LABEL" ]]; then
-            echo "Deployment version mismatch"
+            echo "Version mismatch"
             exit 1
           fi
 
           if [[ "$health" == "Red" ]]; then
-            echo "Elastic Beanstalk environment health is Red"
+            echo "Environment health is Red"
             exit 1
           fi
 
           echo "Deployment completed successfully"
 
-      # 16. Show recent events if deployment fails
+      # ========================================
+      # 17. Show logs on deployment failure
+      # ========================================
       - name: Show Elastic Beanstalk events on failure
-        if: failure()
+        if: failure() && steps.aws_auth.outcome == 'success'
         run: |
-          if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
-            echo "AWS credentials unavailable; skipping EB events."
-            exit 0
-          fi
-
           aws elasticbeanstalk describe-events \
             --environment-name "$EB_ENVIRONMENT_NAME" \
             --max-items 15 \
